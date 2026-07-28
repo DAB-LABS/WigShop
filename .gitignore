@@ -1,0 +1,30 @@
+# Internal docs, not for the public repo
+docs/internal/
+
+# Working files
+trash/
+
+# Internal imagery (public assets live in images/ and ARE tracked)
+images/internal/
+
+# OS
+.DS_Store
+Thumbs.db
+.Trash/
+.trash/
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Backups
+*.bak
+*.bak2
+.backups/
+
+# Agent local settings
+.claude/
+CLAUDE.md
