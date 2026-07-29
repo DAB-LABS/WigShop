@@ -1,0 +1,95 @@
+{
+    "format": "hair-wig/1",
+    "name": "Candles (Tea Light)",
+    "brand": "Sanmli",
+    "model": "TH-05",
+    "kind": "candles",
+    "notes": "From Amazon",
+    "origin": "device",
+    "identifiers": {
+        "upc": "794969274724",
+        "asin": "B0DF7FPV55",
+        "oem": "Sanmli"
+    },
+    "signals": [
+        {
+            "alias": "On",
+            "pronto": "0000 006D 000C 0000 001C 0025 003B 0046 001A 0022 001E 0022 001E 0022 001E 0022 003E 0023 001D 0023 001D 0022 001E 0022 001E 0043 001D 017C"
+        },
+        {
+            "alias": "Off",
+            "pronto": "0000 006D 000B 0000 001D 0022 003E 0041 001F 0021 001F 0022 001E 0021 001E 0021 003D 0022 001E 0041 003E 0022 001E 0021 001E 017C"
+        },
+        {
+            "alias": "SL (Candle Like)",
+            "pronto": "0000 006D 000B 0000 001F 0021 003F 0040 001F 0021 001F 0021 001F 0021 001F 0021 003F 0021 001E 0041 001F 0021 003F 0021 001F 017C"
+        },
+        {
+            "alias": "Light (Solid Light)",
+            "pronto": "0000 006D 000B 0000 001F 0020 0040 0041 001F 0020 0020 0021 001F 0020 0020 0020 003F 0021 001F 0040 0020 0020 001F 0020 003F 017C"
+        },
+        {
+            "alias": "8 Hour",
+            "pronto": "0000 006D 000B 0000 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 0020 0020 001F 0020 0040 0040 003F 0021 001F 0040 0040 017C"
+        },
+        {
+            "alias": "6 Hour",
+            "pronto": "0000 006D 000C 0000 001F 0021 003E 0040 001F 0021 001F 0022 001E 0021 001F 0021 001E 0021 003F 0022 001F 0020 001E 0021 001E 0021 001F 017C"
+        },
+        {
+            "alias": "4 Hour",
+            "pronto": "0000 006D 000C 0000 001F 0020 0020 0020 001F 0020 0020 0020 0020 0020 0020 0020 0020 0020 003F 0020 0020 0020 0020 0040 0040 0020 0020 017C"
+        },
+        {
+            "alias": "Brighten Up",
+            "pronto": "0000 006D 000B 0000 001F 0021 003E 0041 001F 0021 001E 0021 001F 0021 001E 0021 003F 0021 001F 0041 003F 0040 001F 0021 001F 017C"
+        },
+        {
+            "alias": "Dim Down",
+            "pronto": "0000 006D 000A 0000 001F 0021 003F 0040 001F 0021 001F 0020 001F 0021 001E 0021 003F 0021 001E 0041 003F 0041 003E 017C"
+        },
+        {
+            "alias": "BL (Fade Out)",
+            "pronto": "0000 006D 000B 0000 0021 001F 0041 003F 0020 0020 0021 001F 0021 001F 0021 001F 0041 001F 0021 001F 0021 003F 0021 001F 0041 017C"
+        },
+        {
+            "alias": "2 Hour",
+            "pronto": "0000 006D 000C 0000 0020 001F 0020 0020 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 003F 0041 003F 0020 001F 0020 0020 0020 001F 017C"
+        },
+        {
+            "alias": "FL (Flicker)",
+            "pronto": "0000 006D 000C 0000 0020 0021 0020 0021 0020 0021 001F 0022 0020 0021 0020 0021 001F 0022 0040 0021 001F 0022 0020 0021 0020 0040 0041 017C"
+        }
+    ],
+    "fittings": [
+        {
+            "handle": "David",
+            "date": "2026-07-28",
+            "content_hash": "sha256:50e076e9623326a4eb9a500572c20d98296f840cccf8f4caadce6314dafd2731",
+            "confirmed": [
+                "On",
+                "Off",
+                "SL (Candle Like)",
+                "Light (Solid Light)",
+                "8 Hour",
+                "6 Hour",
+                "4 Hour",
+                "Brighten Up",
+                "Dim Down",
+                "BL (Fade Out)",
+                "2 Hour",
+                "FL (Flicker)"
+            ],
+            "failed": [],
+            "hair_version": "0.7.2",
+            "ha_version": "2026.7.2",
+            "github": "DAB-LABS",
+            "note": "Verfixed by DAB",
+            "emitter": "broadlink",
+            "receiver": "esphome",
+            "signals_heard": 6,
+            "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
+            "sig": "UMgByDgsqarOEdBumwmfmXG4n1PzneURj0ZXLncfKzqMRvcammmNS/Ymta8UnmhvbmE+Sk9zFNrM4NqIf6QECQ=="
+        }
+    ]
+}
