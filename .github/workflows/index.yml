@@ -1,0 +1,56 @@
+name: Rebuild INDEX.md
+
+# INDEX.md is generated, never hand-edited. It rebuilds here on merge
+# rather than in the pull request, because a contributor would need a
+# HAIR checkout to regenerate it and there is no reason to put that in
+# front of somebody submitting one JSON file.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "wigs/**"
+      - "tools/build_index.py"
+      - ".github/workflows/index.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  HAIR_REF: v0.8.9
+
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the shop
+        uses: actions/checkout@v4
+
+      - name: Check out HAIR at ${{ env.HAIR_REF }}
+        uses: actions/checkout@v4
+        with:
+          repository: DAB-LABS/HAIR
+          ref: ${{ env.HAIR_REF }}
+          path: .hair
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Rebuild the index
+        run: python3 tools/build_index.py --hair-src .hair
+
+      - name: Commit if it changed
+        run: |
+          if git diff --quiet -- INDEX.md; then
+            echo "INDEX.md already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add INDEX.md
+          git commit -m "Rebuild INDEX.md"
+          git push

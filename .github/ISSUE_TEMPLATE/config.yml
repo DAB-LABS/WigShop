@@ -1,0 +1,16 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Something wrong with HAIR itself
+    url: https://github.com/DAB-LABS/HAIR/issues
+    about: >-
+      Bugs in the integration, the Closet, or the fitting flow live on
+      HAIR's tracker. This repo is just the wigs.
+  - name: The wig format
+    url: https://github.com/DAB-LABS/HAIR/blob/main/docs/wig-format.md
+    about: >-
+      The format contract, for anyone writing a tool that emits wigs.
+  - name: How to contribute a wig
+    url: https://github.com/DAB-LABS/WigShop/blob/main/CONTRIBUTING.md
+    about: >-
+      Fit it, download it, open a pull request. The whole loop, in
+      detail.

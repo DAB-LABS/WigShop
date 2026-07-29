@@ -1,0 +1,75 @@
+name: Validate wigs
+
+# Every check here runs HAIR's own format code, pinned to a release.
+# The shop deliberately does not carry a second implementation of the
+# wig format: a wig that passes here parses on a real install, because
+# it is literally the same parser. Bump HAIR_REF when you want the
+# shop to move to newer validation.
+
+on:
+  pull_request:
+    paths:
+      - "wigs/**"
+      - "tools/**"
+      - ".github/workflows/validate.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  HAIR_REF: v0.8.9
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the shop
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check out HAIR at ${{ env.HAIR_REF }}
+        uses: actions/checkout@v4
+        with:
+          repository: DAB-LABS/HAIR
+          ref: ${{ env.HAIR_REF }}
+          path: .hair
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install signature verification
+        run: pip install --quiet cryptography
+
+      - name: Work out which wigs changed
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="origin/${{ github.base_ref }}"
+            git fetch --quiet origin "${{ github.base_ref }}"
+            files=$(git diff --name-only --diff-filter=d "$base"...HEAD -- 'wigs/**/*.wig.json' | tr '\n' ' ')
+            echo "base=$base" >> "$GITHUB_OUTPUT"
+          else
+            files=""
+            echo "base=" >> "$GITHUB_OUTPUT"
+          fi
+          echo "files=$files" >> "$GITHUB_OUTPUT"
+          if [ -n "$files" ]; then
+            echo "Changed wigs: $files"
+          else
+            echo "No changed wigs; checking everything in wigs/"
+          fi
+
+      - name: Validate
+        run: |
+          args=""
+          if [ -n "${{ steps.changed.outputs.base }}" ]; then
+            args="--base-ref ${{ steps.changed.outputs.base }}"
+          fi
+          python3 tools/validate_wigs.py \
+            --hair-src .hair \
+            $args \
+            ${{ steps.changed.outputs.files }}
