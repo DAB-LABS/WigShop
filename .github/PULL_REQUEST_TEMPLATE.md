@@ -21,13 +21,15 @@ Codes that started life in another project's database are fine here, as long as 
 
 ## Checklist
 
+These two always apply:
+
 - [ ] The fitting is complete. Every signal confirmed, none failed.
-- [ ] The file is at `wigs/<brand>/<brand>-<kind>-<model>.wig.json`, brand folder lowercase with hyphens.
-- [ ] If it is in `unbranded/`, the wig carries an FCC ID, UPC or ASIN in `identifiers`.
+- [ ] The file is at `wigs/<brand>/<brand>-<kind>-<model>.wig.json`, brand folder lowercase with hyphens. HAIR names your download after the wig, so this usually means renaming it.
 
-**Adding a fitting to a wig that is already here?** One more:
+These two only apply sometimes. **Leave them unticked if they are not your situation.** That is the right answer, not a gap.
 
-- [ ] I downloaded the current wig from this repo before fitting it, so my file carries everyone else's fittings alongside mine.
+- [ ] This wig is in `unbranded/`, and it carries an FCC ID, UPC or ASIN in `identifiers`.
+- [ ] This adds my fitting to a wig already in the shop, and I downloaded the current file from here before fitting it, so my file carries everyone else's fittings alongside mine.
 
 ## Anything worth knowing
 
