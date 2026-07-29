@@ -24,12 +24,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out the shop
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Check out HAIR at ${{ env.HAIR_REF }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: DAB-LABS/HAIR
           ref: ${{ env.HAIR_REF }}
@@ -37,7 +37,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.13"
 
