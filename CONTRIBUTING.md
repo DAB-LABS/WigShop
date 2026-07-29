@@ -36,15 +36,33 @@ Put your GitHub handle in. It is optional in the format, but the shop's promotio
 
 1. Fit it until every signal is confirmed.
 2. In the Closet, download the wig.
-3. Open a pull request adding it at:
+3. **Rename the file.** HAIR names your download after the wig, so you will get something like `candles-tea-light.wig.json`. The shop wants the brand, kind and model instead:
 
    ```
-   wigs/<brand>/<brand>-<kind>-<model>.wig.json
+   sanmli-candles-th05.wig.json
    ```
 
-4. Tick the declaration in the PR template.
+   Everybody hits this. It is not you doing something wrong, it is two naming schemes meeting. Details under [Naming and placement](#naming-and-placement).
+
+4. Open a pull request adding it at `wigs/<brand>/<that filename>`, so for the example above, `wigs/sanmli/sanmli-candles-th05.wig.json`.
+5. Tick the declaration in the PR template.
 
 Checks run on the PR. A human then confirms it is not a duplicate and the brand looks plausible, and merges it.
+
+### Doing it without git
+
+You do not need a terminal, a clone, or any tooling. The whole thing works in a browser.
+
+**If the brand folder does not exist yet**, which it will not for a brand nobody has posted:
+
+1. On your own machine, make a folder named after the brand, lowercase, and put the renamed wig inside it. For the example above that is a folder `sanmli` containing `sanmli-candles-th05.wig.json`.
+2. On GitHub, click into the [`wigs/`](wigs/) folder, then **Add file** and **Upload files**.
+3. Drag the whole brand folder onto the page. GitHub keeps the folder structure, so it lands at the right path.
+4. At the bottom, choose **Create a new branch for this commit and start a pull request**, then **Propose changes**. The template loads and you fill it in.
+
+**If the brand folder already exists**, click into it first, then **Add file** and **Upload files**, and drag the file itself.
+
+The checkboxes in the template are easier to tick after the pull request is open: submit it, then click them in the rendered description. Typing `[x]` by hand works too, but the spacing inside the brackets has to be exact.
 
 ---
 
@@ -54,7 +72,9 @@ This is the most useful thing you can do here, and it is the same single file.
 
 1. **Download the current wig from this repo.** Not an older copy from your Closet.
 2. Drop it on HAIR's Closet, press FIT, confirm every signal.
-3. Download it again and open a pull request replacing that same file.
+3. Download it again, rename it back to the name it has in this repo, and open a pull request replacing that same file.
+
+In the browser: click into the wig's brand folder here, **Add file**, **Upload files**, and drag your renamed copy in. Same filename means GitHub records it as a change to that wig rather than a second one, which is exactly what you want. Then **Create a new branch for this commit and start a pull request**.
 
 **Why step 1 matters.** The wig in this repo carries every fitting anyone has recorded. If you fit a copy you downloaded last month, your file is missing the fittings that landed since, and replacing the repo's copy with yours would delete somebody else's work. Git will not warn you, because dropping an array entry is a perfectly clean diff. The checks catch it and refuse the PR, but you will save yourself a round trip by starting from the current file.
 
@@ -65,6 +85,8 @@ This is the most useful thing you can do here, and it is the same single file.
 **Brand folder.** Lowercase, ASCII, hyphens, no spaces. One folder per brand with no nesting under parent companies, so Fujitsu General goes in `fujitsu`, not `fujitsu-general` or `fujitsu/general`.
 
 **Filename.** `<brand>-<kind>-<model>.wig.json`
+
+This is almost never what HAIR names your download. HAIR names the file after the wig, so "Candles (Tea Light)" comes out as `candles-tea-light.wig.json`, and the shop wants `sanmli-candles-th05.wig.json`. Renaming is a normal step, not a sign you did something wrong.
 
 - `brand` repeats the folder. That is deliberate: the file lands in somebody's Downloads with no path around it.
 - `kind` is one word, no inner dashes. `tv`, `soundbar`, `receiver`, `settopbox`, `projector`, `fan`, `light`, `candles`, `ac`, `heater`, `blinds`. Others are fine if none of those fit.
