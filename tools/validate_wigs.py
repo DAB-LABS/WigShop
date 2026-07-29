@@ -151,8 +151,17 @@ def github_key(value: object) -> str | None:
         if text.lower().startswith(prefix):
             text = text[len(prefix) :]
             break
-    text = text.lstrip("@").strip().rstrip("/")
-    return text.casefold() or None
+    text = text.lstrip("@").strip()
+    # A pasted URL often carries more than the account: a repo path
+    # (github.com/name/repo) or a query (github.com/name?tab=stars).
+    # Keep the first segment only. Without this the key comes back as
+    # "name/repo", which is not merely useless, it is wrong: it makes
+    # one account look like a different contributor from the same
+    # account typed plainly, which is the exact failure this function
+    # exists to prevent.
+    for sep in ("/", "?", "#"):
+        text = text.split(sep, 1)[0]
+    return text.strip().casefold() or None
 
 
 def fitting_identity(raw: dict) -> tuple[str, str]:
@@ -317,23 +326,40 @@ def check_wig(
             if fp:
                 fingerprints[fp].add(github_key(fitting.raw.get("github")) or who)
 
+    # Same-person detection warns, it never fails the run.
+    #
+    # A wig arriving in a pull request must contain every fitting the
+    # repo's copy already has, or the superset check refuses it. So if
+    # a duplicate is already sitting in a merged wig, a contributor can
+    # neither keep it (this check would fail them) nor remove it (the
+    # superset check would fail them, and tell them they fitted a stale
+    # copy, which is not what happened). That is a rejection nobody can
+    # act on, and HAIR gives a fitter no way to delete a fitting anyway.
+    #
+    # The rule this follows: only fail a pull request for something the
+    # person opening it can actually change. Losing a fitting is
+    # actionable, so it fails. Somebody else's duplicate is not, so it
+    # is surfaced for the maintainer instead. The strict version of this
+    # belongs at factory promotion, which is the gate that matters and
+    # which counts handles itself.
     for names in seen_handles.values():
         if len(names) > 1:
-            report.fail(
+            report.warn(
                 rel_path,
-                f"handle {names[0]!r} appears on {len(names)} fittings; "
-                "one fitting per person per wig. Refitting replaces your "
-                "entry rather than adding a second one",
+                f"handle {names[0]!r} appears on {len(names)} fittings. "
+                "A person refitting should replace their own entry "
+                "rather than add a second one, so this is worth a look",
             )
 
     for account, names in seen_accounts.items():
         if len(names) > 1:
             shown = ", ".join(repr(n) for n in sorted(set(names)))
-            report.fail(
+            report.warn(
                 rel_path,
                 f"fittings {shown} all give the GitHub handle "
-                f"{account!r}, so they are the same person under "
-                "different names. One fitting per person per wig",
+                f"{account!r}, so they look like one person under "
+                "different names. Not a failure, but they should not "
+                "count as independent proof at promotion",
             )
 
     for fp, accounts in fingerprints.items():
