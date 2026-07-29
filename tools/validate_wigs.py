@@ -121,15 +121,53 @@ def git_show(ref: str, path: str) -> str | None:
     return result.stdout
 
 
+def github_key(value: object) -> str | None:
+    """The canonical form of a GitHub handle, for comparison only.
+
+    People type this field by hand, so the same account arrives as
+    ``dab``, ``@dab``, ``DAB`` and ``github.com/dab``. Left alone, one
+    person on two installs reads as two distinct contributors, which is
+    exactly what the factory's three-distinct-handles gate is supposed
+    to prevent.
+
+    This never rewrites a file. Fittings are signed over their own
+    contents, so normalizing ``@dab`` to ``dab`` on disk would break the
+    signature and violate the immutability rule at the same time. The
+    canonical form exists to compare with, not to store.
+
+    Case-folded because GitHub usernames are case-insensitive, and the
+    leading ``@`` is dropped because it is not a legal username
+    character, so removing it loses nothing.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    for prefix in (
+        "https://github.com/",
+        "http://github.com/",
+        "www.github.com/",
+        "github.com/",
+    ):
+        if text.lower().startswith(prefix):
+            text = text[len(prefix) :]
+            break
+    text = text.lstrip("@").strip().rstrip("/")
+    return text.casefold() or None
+
+
 def fitting_identity(raw: dict) -> tuple[str, str]:
     """What makes two fitting entries 'the same fitting'.
 
     Handle plus content hash. A person refitting the same codes replaces
     their own entry rather than stacking a second one, and that is the
     only case where a fitting legitimately changes.
+
+    The handle is compared case-insensitively so that somebody who
+    refits as ``david`` having first fitted as ``David`` does not read
+    as having deleted their own earlier fitting.
     """
     return (
-        str(raw.get("handle", "")),
+        str(raw.get("handle", "")).strip().casefold(),
         str(raw.get("content_hash", "")),
     )
 
@@ -216,12 +254,17 @@ def check_wig(
             "hardware first; see CONTRIBUTING.md",
         )
 
-    seen_handles: dict[str, int] = defaultdict(int)
+    seen_handles: dict[str, list[str]] = defaultdict(list)
+    seen_accounts: dict[str, list[str]] = defaultdict(list)
     fingerprints: dict[str, set[str]] = defaultdict(set)
 
     for fitting in view.fittings:
         who = fitting.handle
-        seen_handles[who] += 1
+        seen_handles[who.strip().casefold()].append(who)
+
+        account = github_key(fitting.raw.get("github"))
+        if account:
+            seen_accounts[account].append(who)
 
         if fitting.draft:
             report.fail(
@@ -272,21 +315,32 @@ def check_wig(
         if isinstance(key, str) and key:
             fp = fsign.key_fingerprint(key)
             if fp:
-                fingerprints[fp].add(who)
+                fingerprints[fp].add(github_key(fitting.raw.get("github")) or who)
 
-    for who, count in seen_handles.items():
-        if count > 1:
+    for names in seen_handles.values():
+        if len(names) > 1:
             report.fail(
                 rel_path,
-                f"handle {who!r} appears on {count} fittings; one "
-                "fitting per person per wig",
+                f"handle {names[0]!r} appears on {len(names)} fittings; "
+                "one fitting per person per wig. Refitting replaces your "
+                "entry rather than adding a second one",
             )
 
-    for fp, handles in fingerprints.items():
-        if len(handles) > 1:
+    for account, names in seen_accounts.items():
+        if len(names) > 1:
+            shown = ", ".join(repr(n) for n in sorted(set(names)))
+            report.fail(
+                rel_path,
+                f"fittings {shown} all give the GitHub handle "
+                f"{account!r}, so they are the same person under "
+                "different names. One fitting per person per wig",
+            )
+
+    for fp, accounts in fingerprints.items():
+        if len(accounts) > 1:
             report.warn(
                 rel_path,
-                f"fittings by {sorted(handles)} share signing key "
+                f"fittings by {sorted(accounts)} share signing key "
                 f"{fp}, so they came from one install. Not a failure, "
                 "worth a look before this counts as independent proof",
             )
