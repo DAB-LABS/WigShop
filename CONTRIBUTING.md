@@ -82,14 +82,18 @@ Drop any piece you genuinely do not have. `sanmli-candles.wig.json` is fine if t
 
 So you know before you open the PR:
 
-- The file parses as `hair-wig/1`, using HAIR's own validator. Failures come back with the specific field.
-- Every fitting is complete: every signal confirmed, none failed.
-- Every fitting's `content_hash` matches the signals in the file it sits in.
-- On a wig that already exists here, the signals hash is unchanged and no existing fitting has gone missing.
-- Signatures verify, where a fitting carries one.
-- The filename, brand folder, and `unbranded/` identifier rule.
+- The file parses, using HAIR's own validator. Failures come back naming the specific field.
+- At least one fitting is there, and every fitting is complete: every row confirmed, none failed.
+- Every fitting's `content_hash` matches the codes in the file it sits in.
+- On a wig that already exists here, the codes hash is unchanged and no existing fitting has gone missing.
+- Signatures verify, where a fitting carries one. Unsigned fittings pass with a note.
+- No two fittings on one wig share a handle.
+- The filename, the brand folder, and the `unbranded/` identifier rule.
+- Nothing else in the repo already has these exact codes.
 
-None of this is new logic invented for the shop. It is the same validation HAIR runs on import.
+None of this is new logic invented for the shop. [`validate.yml`](.github/workflows/validate.yml) checks out HAIR at a pinned release and runs the same parser your own install runs on import, so a wig that passes here is a wig that loads there. The format itself is documented in [HAIR's wig format contract](https://github.com/DAB-LABS/HAIR/blob/main/docs/wig-format.md), which is everything you need if you are writing a tool that emits wigs.
+
+A few things come back as warnings rather than failures, because they need a person to look rather than a rule to fire: an unsigned fitting, a brand field that disagrees with its folder, a missing `kind`, or two handles that signed with the same key.
 
 ---
 
@@ -127,7 +131,15 @@ Every pull request carries one checkbox:
 
 Please mean it. A merged wig is permanent and CC0 cannot be withdrawn. This repo is worth exactly as much as that sentence is true.
 
-If your codes came out of another project's code database rather than off your own hardware, say so in the PR rather than ticking the box. A fitting proves the codes work; it does not settle where they came from, and that is worth being straight about.
+### Codes that came from another project
+
+These are fine here, as long as you fitted them yourself.
+
+Pulling a code set out of SmartIR or anywhere else, sending it at your own air conditioner, and confirming every state on the unit in front of you is exactly what the declaration's second clause describes. You verified them on hardware you have access to. Tick the box.
+
+Two things get conflated, so it is worth separating them. What makes CC0 workable here is that IR codes are functional facts: a description of what a device listens for, with very little in them to own. That is a property of the codes themselves, not of your testing. The fitting is what makes a wig worth having, because it proves the thing works on real hardware. It is a quality bar, and it was never meant to settle provenance.
+
+So mention where the codes came from in the PR. It is useful, the next person may want to know, and being straight about it costs nothing. Just do not treat it as a reason to hold back the declaration.
 
 ---
 

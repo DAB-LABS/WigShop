@@ -113,6 +113,16 @@ When a wig graduates, its entry stays right here with a pointer to where it went
 
 ---
 
+## Writing something that emits wigs
+
+The format is documented in [HAIR's wig format contract](https://github.com/DAB-LABS/HAIR/blob/main/docs/wig-format.md). One JSON file, one remote, and everything a writer needs is on that page.
+
+The shop's [checks](.github/workflows/validate.yml) run that same validator, pinned to a HAIR release, so if your output loads in HAIR it passes here.
+
+Convert inbound only. Read your source format, emit a wig, and leave it at that. Do not bundle or redistribute somebody else's code database, here or anywhere: convert files the user already holds.
+
+---
+
 ## License and the declaration
 
 Wig data in this repo is released under [CC0 1.0](LICENSE), a public domain dedication. IR codes are functional facts, and CC0 keeps the path into upstream Home Assistant clean with no license question to argue about later.

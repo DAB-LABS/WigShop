@@ -15,7 +15,9 @@ Details on any of this: CONTRIBUTING.md
 
 - [ ] These codes came off hardware I have access to, or I verified them on it, and I am releasing them under this repository's license ([CC0 1.0](../LICENSE)).
 
-If that is not quite true, do not tick it. Say where the codes came from instead and we will work out where they belong. A fitting proves the codes work; it does not settle where they came from.
+If that is not quite true, do not tick it. Say where the codes came from instead and we will work out where they belong.
+
+Codes that started life in another project's database are fine here, as long as you fitted them yourself on your own hardware. That is what the second clause covers, so tick the box and mention the source below.
 
 ## Checklist
 

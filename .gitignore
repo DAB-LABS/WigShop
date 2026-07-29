@@ -13,6 +13,10 @@ Thumbs.db
 .Trash/
 .trash/
 
+# Python (tools/)
+__pycache__/
+*.pyc
+
 # Editors
 .vscode/
 .idea/
