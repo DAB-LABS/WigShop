@@ -64,7 +64,7 @@
     "fittings": [
         {
             "handle": "David",
-            "date": "2026-07-28",
+            "date": "2026-07-30",
             "content_hash": "sha256:50e076e9623326a4eb9a500572c20d98296f840cccf8f4caadce6314dafd2731",
             "confirmed": [
                 "On",
@@ -81,15 +81,16 @@
                 "FL (Flicker)"
             ],
             "failed": [],
-            "hair_version": "0.7.2",
+            "hair_version": "0.9.0",
             "ha_version": "2026.7.2",
             "github": "DAB-LABS",
-            "note": "Verfixed by DAB",
+            "note": "Tested with 3 sends",
             "emitter": "broadlink",
             "receiver": "esphome",
-            "signals_heard": 6,
+            "signals_heard": 8,
+            "send_times_used": 3,
             "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
-            "sig": "UMgByDgsqarOEdBumwmfmXG4n1PzneURj0ZXLncfKzqMRvcammmNS/Ymta8UnmhvbmE+Sk9zFNrM4NqIf6QECQ=="
+            "sig": "+lMA4c8DGUhsMvzNvnAjOXHTwVmW+eLthtUq4Z6aaFj66KLmQygn39JVu004oDua0uW3SanXm2kF77LbyrGDBA=="
         }
     ]
 }
