@@ -64,33 +64,40 @@
     "fittings": [
         {
             "handle": "David",
-            "date": "2026-07-30",
+            "date": "2026-07-31",
             "content_hash": "sha256:50e076e9623326a4eb9a500572c20d98296f840cccf8f4caadce6314dafd2731",
             "confirmed": [
                 "On",
-                "Off",
                 "SL (Candle Like)",
                 "Light (Solid Light)",
                 "8 Hour",
                 "6 Hour",
                 "4 Hour",
-                "Brighten Up",
                 "Dim Down",
+                "Brighten Up",
                 "BL (Fade Out)",
                 "2 Hour",
-                "FL (Flicker)"
+                "FL (Flicker)",
+                "Off"
             ],
             "failed": [],
-            "hair_version": "0.9.0",
+            "hair_version": "0.9.1",
             "ha_version": "2026.7.2",
             "github": "DAB-LABS",
-            "note": "Tested with 3 sends",
+            "note": "Verified against 0.9.1 and pre-combed.",
             "emitter": "broadlink",
             "receiver": "esphome",
             "signals_heard": 8,
-            "send_times_used": 3,
+            "send_times_used": 4,
             "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
-            "sig": "+lMA4c8DGUhsMvzNvnAjOXHTwVmW+eLthtUq4Z6aaFj66KLmQygn39JVu004oDua0uW3SanXm2kF77LbyrGDBA=="
+            "sig": "QfYLjFbKh09af2k14iyHQQyAddxs150FKErl+Cde9g+MLzgUlHloCaT/9WFRPbQySYW+/JUPOzigWWabOCz7BA=="
         }
-    ]
+    ],
+    "comb": {
+        "version": 1,
+        "date": "2026-07-31",
+        "suspects": 0,
+        "counts": {},
+        "findings": []
+    }
 }
