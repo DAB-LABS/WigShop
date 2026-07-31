@@ -371,6 +371,8 @@ def check_wig(
                 "worth a look before this counts as independent proof",
             )
 
+    check_comb(rel_path, wig, report)
+
     if brand_folder == UNBRANDED:
         values = []
         for key in (wig.identifiers or {}):
@@ -401,6 +403,206 @@ def check_wig(
         )
 
     return wig, content_hash
+
+
+def check_comb(rel_path: str, wig, report: Report) -> None:
+    """Surface what combing found, if anyone combed this wig.
+
+    A fitting attests the dimension checklist, which on a matrix wig is
+    nine or so rows out of a lattice of hundreds. Codes outside the
+    checklist can be wrong and no fitting will ever say so: the
+    Toyotomi example carries three cells that send their neighbour's
+    code, none of them in its checklist, under a complete signed
+    fitting. The comb receipt is the only thing in the file that knows,
+    so reading past it means merging a wig whose own paperwork says it
+    is broken.
+
+    Warnings, never failures. Combing reports and never changes a code,
+    ``suspects`` is defined as findings a human should look at, and a
+    wig with three bad cells out of a hundred and eighty is still worth
+    having. This puts it in front of the maintainer and stops there.
+    """
+    comb = wig.extra.get("comb")
+
+    if comb is None:
+        report.warn(
+            rel_path,
+            "no comb receipt, so nobody has checked this wig's codes "
+            "against each other. Not the same as clean: import it into "
+            "HAIR 0.9.1 or newer, or press the comb on its closet row, "
+            "and share it again to carry the result",
+        )
+        return
+
+    if not isinstance(comb, dict):
+        report.warn(rel_path, '"comb" is not an object; ignored')
+        return
+
+    suspects = comb.get("suspects")
+    if not isinstance(suspects, int):
+        report.warn(rel_path, 'comb receipt has no readable "suspects" count')
+        return
+
+    if suspects == 0:
+        return
+
+    counts = comb.get("counts")
+    detail = ""
+    if isinstance(counts, dict) and counts:
+        detail = "; ".join(
+            f"{k}: {v}" for k, v in sorted(counts.items())
+        )
+    dated = comb.get("date")
+    report.warn(
+        rel_path,
+        f"combing found {suspects} suspect(s)"
+        + (f" ({detail})" if detail else "")
+        + (f", recorded {dated}" if dated else "")
+        + ". Worth reading the receipt before merging",
+    )
+
+    # The one class worth naming individually. A malformed frame is
+    # ignored by the device, which is annoying but obvious. A cell
+    # sending its neighbour's code makes the device respond and look
+    # like it worked while landing on the wrong state, so nobody
+    # notices until they wonder why the room is a degree off.
+    findings = comb.get("findings")
+    if not isinstance(findings, list):
+        return
+    neighbours = [
+        f
+        for f in findings
+        if isinstance(f, dict) and f.get("check") == "duplicated-neighbour"
+    ]
+    if not neighbours:
+        return
+
+    rows = []
+    for f in neighbours[:8]:
+        keys = f.get("keys")
+        rows.append(" and ".join(keys) if isinstance(keys, list) else "?")
+    shown = "; ".join(rows)
+    if len(neighbours) > 8:
+        shown += f"; and {len(neighbours) - 8} more"
+    report.warn(
+        rel_path,
+        f"{len(neighbours)} cell(s) send a neighbour's code: {shown}. "
+        "The device answers and looks like it worked while setting the "
+        "wrong state, and a dimension checklist does not sample these, "
+        "so no fitting can catch it",
+    )
+
+    truncated = comb.get("truncated")
+    if isinstance(truncated, int) and truncated > 0:
+        report.warn(
+            rel_path,
+            f"the comb receipt lists 200 findings and omits {truncated} "
+            "more; the counts above describe the full result",
+        )
+
+
+def _normal_pronto(value: object) -> str:
+    """The pronto form the canonical hash compares, for diffing rows."""
+    return " ".join(str(value).split()).lower()
+
+
+def _signal_rows(raw: dict) -> dict:
+    """Signal rows from raw JSON: key -> (pronto, send_count, marked)."""
+    rows = {}
+    for sig in raw.get("signals") or []:
+        if not isinstance(sig, dict):
+            continue
+        alias = sig.get("alias")
+        if not isinstance(alias, str):
+            continue
+        rows[alias] = (
+            _normal_pronto(sig.get("pronto")),
+            sig.get("send_count", 1),
+            isinstance(sig.get("provenance"), dict),
+        )
+    return rows
+
+
+def _matrix_rows(raw: dict, mods) -> dict:
+    """Matrix rows from raw JSON, keyed the way fittings key them."""
+    wf = mods["wig_format"]
+    climate = raw.get("climate")
+    if not isinstance(climate, dict):
+        return {}
+    rows = {}
+    power_marks = climate.get("provenance_power")
+    power_marks = power_marks if isinstance(power_marks, dict) else {}
+    for name in ("on", "off"):
+        if climate.get(name) is not None:
+            rows[name] = (
+                _normal_pronto(climate.get(name)),
+                1,
+                isinstance(power_marks.get(name), dict),
+            )
+    parsed = wf.parse_wig(json.dumps(raw))
+    if parsed.ok and parsed.wig is not None and parsed.wig.climate is not None:
+        for cell, cell_raw in zip(
+            parsed.wig.climate.cells, climate.get("cells") or []
+        ):
+            key = wf.cell_key(cell)
+            marked = isinstance(
+                cell_raw.get("provenance"), dict
+            ) if isinstance(cell_raw, dict) else False
+            rows[key] = (
+                _normal_pronto(cell.pronto),
+                cell.send_count,
+                marked,
+            )
+    return rows
+
+
+def classify_code_change(old_raw: dict, new_raw: dict, mods) -> dict:
+    """Work out whether a signals change is a documented repair.
+
+    HAIR 0.9.1 lets a fitter replace a bad code from inside the fitting
+    session, and stamps the row it changed with a provenance marker.
+    The spec makes that marker load-bearing: replacing a code with the
+    identical code is refused rather than stamped, so a marker always
+    means the codes really moved. That gives the shop a way to tell a
+    repair from somebody hand-editing a merged wig, which the
+    immutability rule exists to catch.
+
+    A repair is documented when every row whose Pronto moved carries a
+    marker, and nothing else about the rows changed. Rows appearing,
+    disappearing or being renamed are not repairs; neither is a
+    ``send_count`` edit, since send evidence belongs on the fitting.
+    """
+    old = _signal_rows(old_raw) or _matrix_rows(old_raw, mods)
+    new = _signal_rows(new_raw) or _matrix_rows(new_raw, mods)
+    if old_raw.get("climate") is not None:
+        old = _matrix_rows(old_raw, mods)
+    if new_raw.get("climate") is not None:
+        new = _matrix_rows(new_raw, mods)
+
+    added = sorted(set(new) - set(old))
+    removed = sorted(set(old) - set(new))
+    replaced, unmarked, recounted = [], [], []
+    for key in sorted(set(old) & set(new)):
+        o_pronto, o_count, _ = old[key]
+        n_pronto, n_count, marked = new[key]
+        if o_pronto != n_pronto:
+            replaced.append(key)
+            if not marked:
+                unmarked.append(key)
+        elif o_count != n_count:
+            recounted.append(key)
+
+    documented = bool(replaced) and not (
+        unmarked or added or removed or recounted
+    )
+    return {
+        "documented": documented,
+        "replaced": replaced,
+        "unmarked": unmarked,
+        "added": added,
+        "removed": removed,
+        "recounted": recounted,
+    }
 
 
 def check_against_base(
@@ -437,15 +639,87 @@ def check_against_base(
 
     old_hash = wf.wig_content_hash(old.wig)
     new_hash = wf.wig_content_hash(new.wig)
+
     if old_hash != new_hash:
-        report.fail(
-            rel_path,
-            "the codes in this wig changed. Once a wig is merged its "
-            "signals are fixed, because every existing fitting is "
-            "bound to a hash of exactly those signals. Corrections "
-            "arrive as a new file with a note about what changed "
-            f"(was {old_hash}, now {new_hash})",
+        change = classify_code_change(
+            json.loads(previous), json.loads(text), mods
         )
+        # What anybody ever proved about the codes that are being
+        # changed. A row somebody confirmed is a row that demonstrably
+        # worked on real hardware; a row nobody confirmed is a gap.
+        proven = set()
+        for f in wfit.parse_fittings(old.wig).fittings:
+            proven.update(f.confirmed)
+        contested = [k for k in change["replaced"] if k in proven]
+
+        if not change["replaced"]:
+            report.fail(
+                rel_path,
+                "the codes in this wig changed, but not in a way that "
+                "reads as a repair "
+                f"(added: {change['added'] or 'none'}; removed: "
+                f"{change['removed'] or 'none'}; send_count edited: "
+                f"{change['recounted'] or 'none'}). Rows appearing, "
+                "disappearing, being renamed or having their send "
+                "count edited are not repairs. Corrections arrive as a "
+                f"new file with a note (was {old_hash}, now {new_hash})",
+            )
+        elif change["unmarked"]:
+            report.fail(
+                rel_path,
+                "the codes on "
+                f"{', '.join(repr(k) for k in change['unmarked'][:6])}"
+                f"{' and more' if len(change['unmarked']) > 6 else ''} "
+                "changed with no provenance marker, so this was not a "
+                "REPLACE from inside a fitting. Once a wig is merged "
+                "its codes are fixed, because every existing fitting "
+                "is bound to a hash of exactly those codes. Repair it "
+                "in HAIR 0.9.1 or newer, which stamps what it "
+                f"changes, or send a new file with a note (was "
+                f"{old_hash}, now {new_hash})",
+            )
+        elif contested:
+            report.fail(
+                rel_path,
+                "this replaces "
+                f"{', '.join(repr(k) for k in contested[:6])}"
+                f"{' and more' if len(contested) > 6 else ''}, which "
+                "somebody already confirmed working on their own "
+                "hardware. A repair fixes a code nobody proved; "
+                "changing one that was proved means either your unit "
+                "differs from theirs or you believe they were wrong, "
+                "and neither is settled by overwriting their file. "
+                "Send it as a new wig with a distinguishing model "
+                "suffix and say what you found",
+            )
+        else:
+            gaps = change["replaced"]
+            report.warn(
+                rel_path,
+                f"{len(gaps)} code(s) replaced: "
+                f"{', '.join(repr(k) for k in gaps[:6])}"
+                f"{' and more' if len(gaps) > 6 else ''}. Marked as a "
+                "repair, and no existing fitting had confirmed these, "
+                "so no proof is being contradicted. The wig's identity "
+                f"rolls from {old_hash[:19]}... to {new_hash[:19]}...",
+            )
+            dropped = sorted(
+                {
+                    f.handle
+                    for f in wfit.parse_fittings(old.wig).fittings
+                }
+            )
+            if dropped:
+                report.warn(
+                    rel_path,
+                    f"fitting(s) by {', '.join(dropped)} no longer "
+                    "travel with this wig: they attested the codes "
+                    "that were replaced, so HAIR strips them as "
+                    "outdated. Expected, and worth a look before "
+                    "merging, because a repair resets a wig's proof "
+                    "to whoever fitted it after the repair",
+                )
+        return
 
     old_ids = {
         fitting_identity(f.raw) for f in wfit.parse_fittings(old.wig).fittings
