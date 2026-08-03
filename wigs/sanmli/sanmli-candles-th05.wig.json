@@ -166,6 +166,76 @@
             ],
             "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
             "sig": "LzG1g7MqbT1IYhp9zwi0cnEot9BHV/VvFAytTg8HZ++VUqoEYr+CYsgZHxpp+QAq9LG+uVJP+WCl0ez0wduBCA=="
+        },
+        {
+            "wig_id": "c1305c7d-a4b2-43ee-90b7-7f36d7d0eb8c",
+            "handle": "David B",
+            "github": "DAB-LABS",
+            "date": "2026-08-03",
+            "rows": [
+                {
+                    "alias_at_claim": "On",
+                    "digest": "a4b1e167f1730730",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Off",
+                    "digest": "87d4c6dafe2fe1b7",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "SL (Candle Like)",
+                    "digest": "b0e0fbc1cb20efbb",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Light (Solid Light)",
+                    "digest": "a0a828a08b11e59d",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "8 Hour",
+                    "digest": "c68fbaed9d3504ea",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "6 Hour",
+                    "digest": "73a1c0fec79133dd",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "4 Hour",
+                    "digest": "b668b875e1c28a44",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Brighten Up",
+                    "digest": "f929b27720f03bee",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Dim Down",
+                    "digest": "54abb21de17a49b9",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "BL (Fade Out)",
+                    "digest": "ddb6a1fb261da5b0",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "2 Hour",
+                    "digest": "d42e74bff1e6dd7d",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "FL (Flicker)",
+                    "digest": "f9b1685e3d318270",
+                    "verdict": "worked"
+                }
+            ],
+            "key": "mwjHYyNWVdVmnq69OnfnRcoArjz0pLxDJKrKAMEhvOI=",
+            "sig": "9IABjekavKqOK9thM9voKTMm38FVSvoz7jc5psQ1Gfcx6njJ4ypWQEYy7G0a6cSf30Zrui/o9W0ZfTXtvy7OAg=="
         }
     ],
     "comb": {
