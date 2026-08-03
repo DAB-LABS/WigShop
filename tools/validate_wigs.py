@@ -13,8 +13,8 @@ Usage:
 
 With FILE arguments it validates exactly those wigs, and, when
 ``--base-ref`` names a git ref where a file already exists, also checks
-the two rules that only mean anything against a previous version:
-signals may not change, and fittings may not disappear.
+what only means anything against a previous version: what a changed row
+cost in orphaned claims, and that no fitting went missing.
 
 With no FILE arguments it validates every wig in ``wigs/``.
 
@@ -164,21 +164,311 @@ def github_key(value: object) -> str | None:
     return text.strip().casefold() or None
 
 
-def fitting_identity(raw: dict) -> tuple[str, str]:
-    """What makes two fitting entries 'the same fitting'.
+def fitting_identities(bundle) -> set[str]:
+    """Every handle by which one person's bundle can be recognised.
 
-    Handle plus content hash. A person refitting the same codes replaces
-    their own entry rather than stacking a second one, and that is the
-    only case where a fitting legitimately changes.
+    A SET rather than a single key, and matched by intersection,
+    because the thing this feeds is the check that refuses a pull
+    request for deleting somebody else's fitting. That check is worth
+    having and its false positive is vicious: it tells a contributor
+    they attested a stale download when they did nothing of the sort,
+    and there is no edit they can make to their own file that answers
+    it.
 
-    The handle is compared case-insensitively so that somebody who
-    refits as ``david`` having first fitted as ``David`` does not read
-    as having deleted their own earlier fitting.
+    So identity is generous on purpose. A person who reinstalls Home
+    Assistant signs with a new key, and a person who tidies their
+    display name changes their handle; either would look like a
+    stranger arriving and the original vanishing if identity rested on
+    one field. This repo has already seen the handle case, with the
+    same install attesting first as "David" and later as "David
+    Bailey".
+
+    Two strangers who both attest unsigned, with no GitHub account and
+    the same display name, will read as one person. That is the right
+    way to be wrong here: the cost is a duplicate nobody is warned
+    about, against falsely accusing somebody of destroying work.
     """
-    return (
-        str(raw.get("handle", "")).strip().casefold(),
-        str(raw.get("content_hash", "")),
-    )
+    out = set()
+    if bundle.key:
+        out.add(f"key:{bundle.key.strip()}")
+    account = github_key(bundle.github)
+    if account:
+        out.add(f"gh:{account}")
+    if bundle.handle and bundle.handle.strip():
+        out.add(f"name:{bundle.handle.strip().casefold()}")
+    return out
+
+
+def check_claims(rel_path: str, wig, mods, report: Report) -> None:
+    """Everything the shop asks of a wig's attestations.
+
+    Under hair-wig/3 a fitting is a signed bundle of per-row claims,
+    each binding one row's transmit recipe by digest. Every judgment
+    here is HAIR's: ``claims_of``, ``wig_row_digests``,
+    ``bundle_is_complete``, ``coverage`` and ``verify_fitting`` are all
+    imported, so a wig that reads perfect here reads perfect in the
+    Closet. The shop adds exactly one idea of its own, and names it
+    something HAIR does not use.
+
+    Three words doing three jobs, deliberately not interchangeable:
+
+    - **Admitted**: every current row carries some claim. The shop's
+      entry gate, and only the shop's. HAIR has no such concept, which
+      is why it does not borrow HAIR's word.
+    - **Perfect**: one person claimed every current row worked. HAIR's
+      ``bundle_is_complete``, and what the Fittings column counts.
+    - **Covered**: the union of rows anybody proved worked. HAIR's
+      ``coverage``, which its own docstring hands to the shop as
+      judgement rather than a green check.
+
+    The distinction is load-bearing. Three people who each proved a
+    different third have not, between them, produced anybody who can
+    say the whole wig works, so coverage must never be allowed to read
+    as proof the way a perfect fit does.
+    """
+    wf = mods["wig_format"]
+    wfit = mods["wig_fitting"]
+    fsign = mods["fitting_signing"]
+
+    raw_entries = wig.extra.get("fittings")
+    raw_entries = raw_entries if isinstance(raw_entries, list) else []
+
+    # Legacy fittings are refused, not converted (owner ruling
+    # 2026-08-03). A whole-file hash says "these bytes, all of them" and
+    # carries nothing about which rows anybody proved, so minting claims
+    # from one would manufacture evidence nobody gave. HAIR drops them on
+    # import and the shop says so out loud rather than letting a wig look
+    # attested when its proof no longer counts anywhere.
+    #
+    # The test is the SHAPE, never the format stamp. Files exist that
+    # stamp hair-wig/3 and carry old-shape fittings, so trusting the
+    # major would admit exactly what this refuses.
+    legacy = [e for e in raw_entries if wf.is_legacy_fitting(e)]
+    if legacy:
+        who = ", ".join(
+            sorted(
+                repr(str(e.get("handle", "?")))
+                for e in legacy
+                if isinstance(e, dict)
+            )
+        )
+        report.fail(
+            rel_path,
+            f"{len(legacy)} fitting(s) ({who}) use the pre-claims format. "
+            "They cannot be converted, because a whole-file hash does not "
+            "record which rows anybody proved. Import this wig into HAIR "
+            "0.9.5 or newer, live with the device, and save it to the "
+            "closet again to attest it under the claims model",
+        )
+
+    bundles = wf.claims_of(wig)
+    if not bundles:
+        # Only when there is nothing at all. A wig carrying legacy
+        # entries has already been told exactly what is wrong with it,
+        # and "no fitting" on a file that visibly contains one reads as
+        # the tool being confused rather than the wig being wrong.
+        if not legacy:
+            report.fail(
+                rel_path,
+                "no fitting. Every wig in the shop was proven on real "
+                "hardware first; see CONTRIBUTING.md",
+            )
+        return
+
+    matrix = wig.climate is not None
+    digests = wf.wig_row_digests(wig)
+    live = set(digests)
+
+    # Pair each bundle with the raw entry it came from: verify_fitting
+    # checks a signature over the raw JSON, not over the parsed object.
+    pairs = []
+    for entry in raw_entries:
+        if not wf.is_claims_bundle(entry):
+            continue
+        bundle = wf.parse_claims_bundle(entry)
+        if bundle is not None:
+            pairs.append((entry, bundle))
+
+    seen_handles: dict[str, list[str]] = defaultdict(list)
+    seen_accounts: dict[str, list[str]] = defaultdict(list)
+    fingerprints: dict[str, set[str]] = defaultdict(set)
+    wont_work: dict[str, list[str]] = defaultdict(list)
+
+    perfect = 0
+    unclaimed_by_any = set(digests)
+
+    for entry, bundle in pairs:
+        who = bundle.handle or "(unnamed)"
+        seen_handles[who.strip().casefold()].append(who)
+        account = github_key(bundle.github)
+        if account:
+            seen_accounts[account].append(who)
+
+        # A bundle carries its own wig id inside the signed bytes, while
+        # the file's is outside every digest and therefore unsigned. If
+        # the two disagree, this bundle was written about a different
+        # wig: the signature still verifies, because it covers the
+        # bundle rather than the file it is sitting in, so nothing else
+        # here would catch it. Two files sharing a code set (rebadged
+        # hardware, a fork, a converted SmartIR entry) would otherwise
+        # let a bundle be copied across and read as proof.
+        if (bundle.wig_id or "").strip() != (wig.wig_id or "").strip():
+            report.fail(
+                rel_path,
+                f"fitting {who!r} claims wig_id {bundle.wig_id!r}, but "
+                f"this file is {wig.wig_id!r}. A bundle is signed over "
+                "itself, not over the file it rides in, so a bundle "
+                "moved between wigs still verifies. This one is "
+                "attesting something else",
+            )
+
+        verdict = fsign.verify_fitting(entry)
+        if verdict == fsign.SIGNED_INVALID:
+            report.fail(
+                rel_path,
+                f"fitting {who!r} carries a signature that does not "
+                "verify. The record was altered after it was recorded",
+            )
+        elif verdict is None:
+            report.warn(
+                rel_path,
+                f"fitting {who!r} is unsigned. Valid, just self-reported",
+            )
+
+        if bundle.key:
+            fp = fsign.key_fingerprint(bundle.key)
+            if fp:
+                fingerprints[fp].add(account or who)
+
+        for row in bundle.rows:
+            if row.verdict == wf.VERDICT_WONT_WORK:
+                wont_work[row.digest].append(who)
+
+        if wfit.bundle_is_complete(bundle, wig, digests):
+            perfect += 1
+
+        if matrix:
+            # A checklist samples a lattice rather than walking it, so
+            # the bundle pins the lattice it sampled. Per-row presence is
+            # not a question that can be asked here: a matrix wig has no
+            # flat row digests by design.
+            if not bundle.cells_hash:
+                report.warn(
+                    rel_path,
+                    f"fitting {who!r} carries no cells_hash, so there is "
+                    "no way to tell which lattice its checklist vouched "
+                    "for",
+                )
+            elif bundle.cells_hash != wf.cells_content_hash(wig.climate):
+                report.fail(
+                    rel_path,
+                    f"fitting {who!r} vouched for a different lattice "
+                    f"(cells_hash {bundle.cells_hash}). The matrix "
+                    "changed after it was attested, and a checklist that "
+                    "sampled the old one says nothing about this one",
+                )
+            continue
+
+        claimed = {row.digest for row in bundle.rows}
+        unclaimed_by_any -= claimed
+
+        orphans = [row for row in bundle.rows if row.digest not in live]
+        if orphans:
+            names = ", ".join(
+                repr(r.alias_at_claim) for r in orphans[:5]
+            )
+            more = f" and {len(orphans) - 5} more" if len(orphans) > 5 else ""
+            report.warn(
+                rel_path,
+                f"fitting {who!r} has {len(orphans)} orphaned claim(s) "
+                f"({names}{more}): rows it proved that the wig no longer "
+                "carries. Kept deliberately, since they are somebody's "
+                "signed statement about bytes that were once here, but "
+                "worth reading before merging",
+            )
+
+    if not matrix:
+        # The shop's entry gate. Deliberately NOT called complete: HAIR
+        # owns that word for one person covering every row, and two
+        # definitions of one word is how verifiers drift apart.
+        if unclaimed_by_any:
+            missing = sorted(unclaimed_by_any)
+            aliases = [
+                s.alias
+                for s in wig.signals
+                if wf.signal_row_digest(s) in unclaimed_by_any
+            ]
+            shown = ", ".join(repr(a) for a in aliases[:5])
+            more = f" and {len(missing) - 5} more" if len(missing) > 5 else ""
+            report.fail(
+                rel_path,
+                f"{len(missing)} row(s) carry no claim at all "
+                f"({shown}{more}). Every row needs somebody's verdict, "
+                "even if that verdict is that the button is not on their "
+                "hardware. Fit the wig on the device and save it to the "
+                "closet again",
+            )
+
+        covered = wf.coverage(bundles, digests)
+        if perfect == 0:
+            report.warn(
+                rel_path,
+                f"no perfect fit: {len(covered)} of {len(digests)} row(s) "
+                "are proven working, but nobody has covered the whole wig "
+                "on their own hardware. Admitted and honest, and the "
+                "Fittings count stays at 0 until somebody does",
+            )
+
+    for names in seen_handles.values():
+        if len(names) > 1:
+            report.warn(
+                rel_path,
+                f"handle {names[0]!r} appears on {len(names)} fittings. "
+                "A person re-attesting should replace their own bundle "
+                "rather than add a second one, so this is worth a look",
+            )
+
+    for account, names in seen_accounts.items():
+        if len(names) > 1:
+            shown = ", ".join(repr(n) for n in sorted(set(names)))
+            report.warn(
+                rel_path,
+                f"fittings {shown} all give the GitHub handle "
+                f"{account!r}, so they look like one person under "
+                "different names. Not a failure, but they should not "
+                "count as independent proof at promotion",
+            )
+
+    for fp, accounts in fingerprints.items():
+        if len(accounts) > 1:
+            report.warn(
+                rel_path,
+                f"fittings by {sorted(accounts)} share signing key "
+                f"{fp}, so they came from one install. Not a failure, "
+                "worth a look before this counts as independent proof",
+            )
+
+    # The reason the exclusion reasons are an enum rather than free
+    # text: several people reporting wont_work on the SAME recipe is a
+    # mechanical signal that the code is wrong for a hardware revision,
+    # which no amount of reading prose would surface reliably.
+    for digest, names in wont_work.items():
+        if len(set(names)) > 1:
+            alias = next(
+                (
+                    s.alias
+                    for s in wig.signals
+                    if wf.signal_row_digest(s) == digest
+                ),
+                digest,
+            )
+            report.warn(
+                rel_path,
+                f"{len(set(names))} fitters report {alias!r} does not "
+                f"work on their hardware ({', '.join(sorted(set(names)))}). "
+                "One person is a hardware revision; several is a sign the "
+                "code itself is wrong",
+            )
 
 
 def check_path_shape(rel_path: str, report: Report) -> str | None:
@@ -231,8 +521,6 @@ def check_wig(
 ) -> tuple[object, str] | None:
     """Parse and check one wig. Returns (wig, content_hash) when usable."""
     wf = mods["wig_format"]
-    wfit = mods["wig_fitting"]
-    fsign = mods["fitting_signing"]
 
     raw_bytes = len(text.encode("utf-8"))
     if raw_bytes > wf.MAX_WIG_BYTES:
@@ -252,124 +540,7 @@ def check_wig(
     wig = result.wig
     content_hash = wf.wig_content_hash(wig)
 
-    view = wfit.parse_fittings(wig)
-    for warning in view.warnings:
-        report.warn(rel_path, warning)
-
-    if not view.fittings:
-        report.fail(
-            rel_path,
-            "no fitting. Every wig in the shop was proven on real "
-            "hardware first; see CONTRIBUTING.md",
-        )
-
-    seen_handles: dict[str, list[str]] = defaultdict(list)
-    seen_accounts: dict[str, list[str]] = defaultdict(list)
-    fingerprints: dict[str, set[str]] = defaultdict(set)
-
-    for fitting in view.fittings:
-        who = fitting.handle
-        seen_handles[who.strip().casefold()].append(who)
-
-        account = github_key(fitting.raw.get("github"))
-        if account:
-            seen_accounts[account].append(who)
-
-        if fitting.draft:
-            report.fail(
-                rel_path,
-                f"fitting {who!r} is a draft. HAIR strips drafts on "
-                "download, so this file was hand-edited",
-            )
-            continue
-
-        if not wfit.fitting_is_valid(fitting, wig):
-            report.fail(
-                rel_path,
-                f"fitting {who!r} has content_hash "
-                f"{fitting.content_hash}, but this wig hashes to "
-                f"{content_hash}. The codes changed after it was "
-                "fitted",
-            )
-
-        if not wfit.fitting_is_complete(fitting, wig):
-            rows = {key for key, _, _ in wfit.fitting_rows(wig)}
-            missing = sorted(rows - set(fitting.confirmed))
-            detail = f"failed: {sorted(fitting.failed)}" if fitting.failed else ""
-            if missing:
-                shown = ", ".join(missing[:5])
-                if len(missing) > 5:
-                    shown += f" and {len(missing) - 5} more"
-                detail = f"{detail + '; ' if detail else ''}unconfirmed: {shown}"
-            report.fail(
-                rel_path,
-                f"fitting {who!r} is incomplete ({detail})",
-            )
-
-        verdict = fsign.verify_fitting(fitting.raw)
-        if verdict == fsign.SIGNED_INVALID:
-            report.fail(
-                rel_path,
-                f"fitting {who!r} carries a signature that does not "
-                "verify. The record was altered after it was recorded",
-            )
-        elif verdict is None:
-            report.warn(
-                rel_path,
-                f"fitting {who!r} is unsigned. Valid, just "
-                "self-reported",
-            )
-
-        key = fitting.raw.get("key")
-        if isinstance(key, str) and key:
-            fp = fsign.key_fingerprint(key)
-            if fp:
-                fingerprints[fp].add(github_key(fitting.raw.get("github")) or who)
-
-    # Same-person detection warns, it never fails the run.
-    #
-    # A wig arriving in a pull request must contain every fitting the
-    # repo's copy already has, or the superset check refuses it. So if
-    # a duplicate is already sitting in a merged wig, a contributor can
-    # neither keep it (this check would fail them) nor remove it (the
-    # superset check would fail them, and tell them they fitted a stale
-    # copy, which is not what happened). That is a rejection nobody can
-    # act on, and HAIR gives a fitter no way to delete a fitting anyway.
-    #
-    # The rule this follows: only fail a pull request for something the
-    # person opening it can actually change. Losing a fitting is
-    # actionable, so it fails. Somebody else's duplicate is not, so it
-    # is surfaced for the maintainer instead. The strict version of this
-    # belongs at factory promotion, which is the gate that matters and
-    # which counts handles itself.
-    for names in seen_handles.values():
-        if len(names) > 1:
-            report.warn(
-                rel_path,
-                f"handle {names[0]!r} appears on {len(names)} fittings. "
-                "A person refitting should replace their own entry "
-                "rather than add a second one, so this is worth a look",
-            )
-
-    for account, names in seen_accounts.items():
-        if len(names) > 1:
-            shown = ", ".join(repr(n) for n in sorted(set(names)))
-            report.warn(
-                rel_path,
-                f"fittings {shown} all give the GitHub handle "
-                f"{account!r}, so they look like one person under "
-                "different names. Not a failure, but they should not "
-                "count as independent proof at promotion",
-            )
-
-    for fp, accounts in fingerprints.items():
-        if len(accounts) > 1:
-            report.warn(
-                rel_path,
-                f"fittings by {sorted(accounts)} share signing key "
-                f"{fp}, so they came from one install. Not a failure, "
-                "worth a look before this counts as independent proof",
-            )
+    check_claims(rel_path, wig, mods, report)
 
     check_comb(rel_path, wig, report)
 
@@ -501,120 +672,30 @@ def check_comb(rel_path: str, wig, report: Report) -> None:
         )
 
 
-def _normal_pronto(value: object) -> str:
-    """The pronto form the canonical hash compares, for diffing rows."""
-    return " ".join(str(value).split()).lower()
-
-
-def _signal_rows(raw: dict) -> dict:
-    """Signal rows from raw JSON: key -> (pronto, send_count, marked)."""
-    rows = {}
-    for sig in raw.get("signals") or []:
-        if not isinstance(sig, dict):
-            continue
-        alias = sig.get("alias")
-        if not isinstance(alias, str):
-            continue
-        rows[alias] = (
-            _normal_pronto(sig.get("pronto")),
-            sig.get("send_count", 1),
-            isinstance(sig.get("provenance"), dict),
-        )
-    return rows
-
-
-def _matrix_rows(raw: dict, mods) -> dict:
-    """Matrix rows from raw JSON, keyed the way fittings key them."""
-    wf = mods["wig_format"]
-    climate = raw.get("climate")
-    if not isinstance(climate, dict):
-        return {}
-    rows = {}
-    power_marks = climate.get("provenance_power")
-    power_marks = power_marks if isinstance(power_marks, dict) else {}
-    for name in ("on", "off"):
-        if climate.get(name) is not None:
-            rows[name] = (
-                _normal_pronto(climate.get(name)),
-                1,
-                isinstance(power_marks.get(name), dict),
-            )
-    parsed = wf.parse_wig(json.dumps(raw))
-    if parsed.ok and parsed.wig is not None and parsed.wig.climate is not None:
-        for cell, cell_raw in zip(
-            parsed.wig.climate.cells, climate.get("cells") or []
-        ):
-            key = wf.cell_key(cell)
-            marked = isinstance(
-                cell_raw.get("provenance"), dict
-            ) if isinstance(cell_raw, dict) else False
-            rows[key] = (
-                _normal_pronto(cell.pronto),
-                cell.send_count,
-                marked,
-            )
-    return rows
-
-
-def classify_code_change(old_raw: dict, new_raw: dict, mods) -> dict:
-    """Work out whether a signals change is a documented repair.
-
-    HAIR 0.9.1 lets a fitter replace a bad code from inside the fitting
-    session, and stamps the row it changed with a provenance marker.
-    The spec makes that marker load-bearing: replacing a code with the
-    identical code is refused rather than stamped, so a marker always
-    means the codes really moved. That gives the shop a way to tell a
-    repair from somebody hand-editing a merged wig, which the
-    immutability rule exists to catch.
-
-    A repair is documented when every row whose Pronto moved carries a
-    marker, and nothing else about the rows changed. Rows appearing,
-    disappearing or being renamed are not repairs; neither is a
-    ``send_count`` edit, since send evidence belongs on the fitting.
-    """
-    old = _signal_rows(old_raw) or _matrix_rows(old_raw, mods)
-    new = _signal_rows(new_raw) or _matrix_rows(new_raw, mods)
-    if old_raw.get("climate") is not None:
-        old = _matrix_rows(old_raw, mods)
-    if new_raw.get("climate") is not None:
-        new = _matrix_rows(new_raw, mods)
-
-    added = sorted(set(new) - set(old))
-    removed = sorted(set(old) - set(new))
-    replaced, unmarked, recounted = [], [], []
-    for key in sorted(set(old) & set(new)):
-        o_pronto, o_count, _ = old[key]
-        n_pronto, n_count, marked = new[key]
-        if o_pronto != n_pronto:
-            replaced.append(key)
-            if not marked:
-                unmarked.append(key)
-        elif o_count != n_count:
-            recounted.append(key)
-
-    documented = bool(replaced) and not (
-        unmarked or added or removed or recounted
-    )
-    return {
-        "documented": documented,
-        "replaced": replaced,
-        "unmarked": unmarked,
-        "added": added,
-        "removed": removed,
-        "recounted": recounted,
-    }
-
-
 def check_against_base(
     rel_path: str, text: str, base_ref: str, mods, report: Report
 ) -> None:
-    """The two rules that only exist relative to what is already merged.
+    """The rules that only exist relative to what is already merged.
 
-    Signals are immutable once merged, because every fitting is bound to
-    a hash of exactly those signals. And an incoming file must carry
-    every fitting the repo's copy already has: a contributor who fitted
-    a stale download produces a clean diff that silently deletes
-    somebody else's work, and git will not warn about it.
+    Signals used to be immutable here, because a fitting bound a hash of
+    the whole file and any edit invalidated every one of them at once.
+    Under hair-wig/3 a claim binds ONE row's transmit recipe, so a
+    repair orphans exactly the claims about the row it changed and
+    leaves everyone else's standing. Repair flowing back to the shop is
+    a designed path now, and the review question is no longer "did the
+    codes change" but "what did the change cost, and did anybody
+    re-attest what it broke".
+
+    Nothing here fails a pull request for changing a code. It does not
+    need to: a repair that changes a row without re-attesting it leaves
+    that row with no claim, and the entry gate in ``check_claims``
+    refuses it there with a message about the row rather than about the
+    diff. This function's job is to price the change for the human.
+
+    What does still fail: a file must carry every bundle the repo's copy
+    already has. Somebody who attests a stale download produces a
+    perfectly clean diff that deletes another person's signed work, and
+    git will not say a word about it.
     """
     wf = mods["wig_format"]
     wfit = mods["wig_fitting"]
@@ -627,9 +708,8 @@ def check_against_base(
     if not old.ok or old.wig is None:
         report.warn(
             rel_path,
-            f"the copy at {base_ref} does not parse, so the "
-            "signals-unchanged and fittings-superset checks were "
-            "skipped",
+            f"the copy at {base_ref} does not parse, so the repair and "
+            "fittings-superset checks were skipped",
         )
         return
 
@@ -637,107 +717,149 @@ def check_against_base(
     if not new.ok or new.wig is None:
         return
 
-    old_hash = wf.wig_content_hash(old.wig)
-    new_hash = wf.wig_content_hash(new.wig)
+    old_bundles = wf.claims_of(old.wig)
+    new_bundles = wf.claims_of(new.wig)
 
-    if old_hash != new_hash:
-        change = classify_code_change(
-            json.loads(previous), json.loads(text), mods
-        )
-        # What anybody ever proved about the codes that are being
-        # changed. A row somebody confirmed is a row that demonstrably
-        # worked on real hardware; a row nobody confirmed is a gap.
-        proven = set()
-        for f in wfit.parse_fittings(old.wig).fittings:
-            proven.update(f.confirmed)
-        contested = [k for k in change["replaced"] if k in proven]
-
-        if not change["replaced"]:
-            report.fail(
-                rel_path,
-                "the codes in this wig changed, but not in a way that "
-                "reads as a repair "
-                f"(added: {change['added'] or 'none'}; removed: "
-                f"{change['removed'] or 'none'}; send_count edited: "
-                f"{change['recounted'] or 'none'}). Rows appearing, "
-                "disappearing, being renamed or having their send "
-                "count edited are not repairs. Corrections arrive as a "
-                f"new file with a note (was {old_hash}, now {new_hash})",
-            )
-        elif change["unmarked"]:
-            report.fail(
-                rel_path,
-                "the codes on "
-                f"{', '.join(repr(k) for k in change['unmarked'][:6])}"
-                f"{' and more' if len(change['unmarked']) > 6 else ''} "
-                "changed with no provenance marker, so this was not a "
-                "REPLACE from inside a fitting. Once a wig is merged "
-                "its codes are fixed, because every existing fitting "
-                "is bound to a hash of exactly those codes. Repair it "
-                "in HAIR 0.9.1 or newer, which stamps what it "
-                f"changes, or send a new file with a note (was "
-                f"{old_hash}, now {new_hash})",
-            )
-        elif contested:
-            report.fail(
-                rel_path,
-                "this replaces "
-                f"{', '.join(repr(k) for k in contested[:6])}"
-                f"{' and more' if len(contested) > 6 else ''}, which "
-                "somebody already confirmed working on their own "
-                "hardware. A repair fixes a code nobody proved; "
-                "changing one that was proved means either your unit "
-                "differs from theirs or you believe they were wrong, "
-                "and neither is settled by overwriting their file. "
-                "Send it as a new wig with a distinguishing model "
-                "suffix and say what you found",
-            )
-        else:
-            gaps = change["replaced"]
-            report.warn(
-                rel_path,
-                f"{len(gaps)} code(s) replaced: "
-                f"{', '.join(repr(k) for k in gaps[:6])}"
-                f"{' and more' if len(gaps) > 6 else ''}. Marked as a "
-                "repair, and no existing fitting had confirmed these, "
-                "so no proof is being contradicted. The wig's identity "
-                f"rolls from {old_hash[:19]}... to {new_hash[:19]}...",
-            )
-            dropped = sorted(
-                {
-                    f.handle
-                    for f in wfit.parse_fittings(old.wig).fittings
-                }
-            )
-            if dropped:
-                report.warn(
-                    rel_path,
-                    f"fitting(s) by {', '.join(dropped)} no longer "
-                    "travel with this wig: they attested the codes "
-                    "that were replaced, so HAIR strips them as "
-                    "outdated. Expected, and worth a look before "
-                    "merging, because a repair resets a wig's proof "
-                    "to whoever fitted it after the repair",
-                )
-        return
-
-    old_ids = {
-        fitting_identity(f.raw) for f in wfit.parse_fittings(old.wig).fittings
-    }
-    new_ids = {
-        fitting_identity(f.raw) for f in wfit.parse_fittings(new.wig).fittings
-    }
-    lost = old_ids - new_ids
+    # Legacy entries are invisible here, and that is the whole reason
+    # this needs no special case. They are refused outright by
+    # check_claims, ``claims_of`` skips them, and so a wig moving off the
+    # old model drops entries this check never counted. No exception
+    # window to bound, and no standing licence to delete a fitting by
+    # relabelling it.
+    present = set().union(*(fitting_identities(b) for b in new_bundles)) \
+        if new_bundles else set()
+    lost = [
+        b for b in old_bundles
+        if not (fitting_identities(b) & present)
+    ]
     if lost:
-        who = ", ".join(sorted(handle for handle, _ in lost))
+        who = ", ".join(sorted(b.handle or "(unnamed)" for b in lost))
         report.fail(
             rel_path,
             f"this file is missing fittings that are already here "
-            f"({who}). You fitted an older copy of the wig. Download "
-            "the current file from this repo, drop it on the Closet, "
-            "fit that, and open the PR from it. Nothing is wrong with "
+            f"({who}). You attested an older copy of the wig. Download "
+            "the current file from this repo, import it, live with it, "
+            "and save it to the closet again. Nothing is wrong with "
             "your fitting; it just needs to ride alongside the others "
             "instead of replacing them",
+        )
+
+    if old.wig.climate is not None or new.wig.climate is not None:
+        old_cells = (
+            wf.cells_content_hash(old.wig.climate)
+            if old.wig.climate is not None
+            else None
+        )
+        new_cells = (
+            wf.cells_content_hash(new.wig.climate)
+            if new.wig.climate is not None
+            else None
+        )
+        if old_cells != new_cells:
+            report.warn(
+                rel_path,
+                "the climate lattice changed, so every checklist that "
+                f"pinned {old_cells} now vouches for a lattice this file "
+                "no longer carries",
+            )
+        return
+
+    def recipe(sig) -> tuple[str, int, bool]:
+        """The three things a row digest binds, for naming what moved."""
+        return (
+            wf.normalized_pronto(sig.pronto),
+            int(sig.ditto_count),
+            bool(sig.bypass_protocol),
+        )
+
+    old_rows = {s.alias: wf.signal_row_digest(s) for s in old.wig.signals}
+    new_rows = {s.alias: wf.signal_row_digest(s) for s in new.wig.signals}
+    old_recipe = {s.alias: recipe(s) for s in old.wig.signals}
+    new_recipe = {s.alias: recipe(s) for s in new.wig.signals}
+
+    # Pair by alias for REPORTING only. Claims match rows by digest
+    # alone, so a rename with an unchanged digest costs nothing and a
+    # row whose digest moved orphans its claims wherever it is named.
+    moved = [
+        a for a in set(old_rows) & set(new_rows)
+        if old_rows[a] != new_rows[a]
+    ]
+    added = sorted(set(new_rows) - set(old_rows))
+    removed = sorted(set(old_rows) - set(new_rows))
+
+    if not (moved or added or removed):
+        return
+
+    if moved:
+        cost: dict[str, set[str]] = defaultdict(set)
+        for bundle in old_bundles:
+            for row in bundle.rows:
+                if row.verdict != wf.VERDICT_WORKED:
+                    continue
+                for alias in moved:
+                    if row.digest == old_rows[alias]:
+                        cost[alias].add(bundle.handle or "(unnamed)")
+
+        def what_moved(alias: str) -> str:
+            """Which of the three recipe parts changed.
+
+            Worth naming rather than saying "the recipe changed": a row
+            whose Pronto is byte-identical and whose ditto count went
+            from 0 to 1 is a real change to what leaves the blaster, and
+            it is also completely invisible in a diff of the codes. A
+            reviewer told only that twelve rows moved will go looking
+            for twelve edited codes and find none.
+            """
+            was, now = old_recipe[alias], new_recipe[alias]
+            parts = []
+            if was[0] != now[0]:
+                parts.append("pronto")
+            if was[1] != now[1]:
+                parts.append(f"ditto_count {was[1]} to {now[1]}")
+            if was[2] != now[2]:
+                parts.append(f"bypass_protocol {was[2]} to {now[2]}")
+            return ", ".join(parts) or "unchanged"
+
+        detail = "; ".join(
+            f"{alias!r} ({what_moved(alias)}"
+            + (
+                f", was proven by {', '.join(sorted(cost[alias]))})"
+                if cost.get(alias)
+                else ", nobody had proven it)"
+            )
+            for alias in sorted(moved)[:6]
+        )
+        more = f"; and {len(moved) - 6} more" if len(moved) > 6 else ""
+        report.warn(
+            rel_path,
+            f"{len(moved)} row(s) changed recipe: {detail}{more}. Those "
+            "claims are now orphaned. They stay in the file as signed "
+            "statements about bytes the wig no longer carries, and they "
+            "are worth weighing: a row somebody proved working is a "
+            "different thing to repair than a row nobody could",
+        )
+
+    if added or removed:
+        report.warn(
+            rel_path,
+            f"rows added: {added or 'none'}; rows removed: "
+            f"{removed or 'none'}. Adding a button is ordinary; removing "
+            "one discards whatever anybody proved about it, so it is "
+            "worth confirming that is deliberate",
+        )
+
+    old_perfect = sum(
+        1 for b in old_bundles if wfit.bundle_is_complete(b, old.wig)
+    )
+    new_perfect = sum(
+        1 for b in new_bundles if wfit.bundle_is_complete(b, new.wig)
+    )
+    if new_perfect < old_perfect:
+        report.warn(
+            rel_path,
+            f"perfect fits drop from {old_perfect} to {new_perfect}. The "
+            "wig is less proven after this change than before it, which "
+            "is expected for a repair and worth seeing plainly",
         )
 
 

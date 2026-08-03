@@ -30,11 +30,17 @@ Every wig in the shop. Generated from the files by
 [`tools/build_index.py`](tools/build_index.py) and rewritten on merge,
 so edits here are overwritten. Change a wig, not this page.
 
-**Fittings** is how many people proved this wig on their own hardware,
-each of them signal by signal. It is the closest thing to a rating this
-repo has, and unlike a star it costs somebody real time at real
-hardware. Three fittings from three different people makes a wig
-eligible for [WigFactory](https://github.com/DAB-LABS/WigFactory).
+**Fittings** is how many people proved every row of this wig on their
+own hardware. It is the closest thing to a rating this repo has, and
+unlike a star it costs somebody real time at real hardware. Three
+fittings from three different people makes a wig eligible for
+[WigFactory](https://github.com/DAB-LABS/WigFactory).
+
+**Covered** is how many rows anybody has proven, pooled across
+everyone. It can reach the full count while Fittings is still zero:
+three people who each proved a different third have not, between them,
+produced anybody who can say the whole wig works. Both numbers are
+true, and they answer different questions.
 
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
@@ -69,17 +75,30 @@ def escape(value: str) -> str:
 
 
 def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
-    """One table row, plus the sort keys behind it."""
+    """One table row, plus the sort keys behind it.
+
+    Fittings counts PERFECT fits, using HAIR's ``bundle_is_complete``,
+    so the number means exactly what a green check means in the Closet.
+    Covered is the union across everybody, which HAIR hands to the shop
+    as judgement rather than a check. Keeping them in separate columns
+    is deliberate: coverage must never be able to read as proof.
+    """
     wf = mods["wig_format"]
     wfit = mods["wig_fitting"]
 
-    view = wfit.parse_fittings(wig)
-    complete = [
-        f
-        for f in view.fittings
-        if wfit.fitting_is_complete(f, wig) and wfit.fitting_is_valid(f, wig)
-    ]
-    handles = sorted({f.handle for f in complete})
+    bundles = wf.claims_of(wig)
+    digests = wf.wig_row_digests(wig)
+    perfect = [b for b in bundles if wfit.bundle_is_complete(b, wig, digests)]
+    handles = sorted({b.handle for b in perfect if b.handle})
+
+    if wig.climate is not None:
+        # A matrix wig's claims bind the lattice as a set, so there is no
+        # per-row union to report. Saying "0/0" would read as nothing
+        # proven, which is the opposite of the truth for a signed
+        # checklist.
+        covered = "matrix"
+    else:
+        covered = f"{len(wf.coverage(bundles, digests))}/{len(digests)}"
 
     ids = []
     for key in sorted(wig.identifiers or {}):
@@ -90,16 +109,33 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     name = escape(wig.name)
     link = f"[{name}]({rel_path})"
 
-    row = "| {brand} | {kind} | {model} | {link} | {count} | {who} | {ids} |".format(
+    row = (
+        "| {brand} | {kind} | {model} | {link} | {count} | {covered} "
+        "| {who} | {ids} |"
+    ).format(
         brand=escape(brand),
         kind=escape(wig.kind or ""),
         model=escape(wig.model or ""),
         link=link,
-        count=len(complete),
+        count=len(perfect),
+        covered=covered,
         who=escape(", ".join(handles)),
         ids=escape("; ".join(ids)),
     )
-    return row, len(complete), brand.lower()
+    return row, len(perfect), brand.lower()
+
+
+def unreadable_section(unreadable: list[str]) -> str:
+    """The files that did not parse, named rather than silently dropped."""
+    if not unreadable:
+        return ""
+    listed = "\n".join(f"- `{p}`" for p in unreadable)
+    return (
+        "\n## Not readable\n\nThese files did not parse and are left "
+        "out of the table above. A wig written for a newer format major "
+        "than the pinned HAIR reads this way, and so does a damaged "
+        "file:\n\n" + listed + "\n"
+    )
 
 
 def build(root: Path, mods) -> str:
@@ -118,7 +154,13 @@ def build(root: Path, mods) -> str:
     parts = [HEADER]
 
     if not rows:
-        parts.append(EMPTY)
+        # Not "the shop is empty" when files exist and none of them
+        # parsed. That distinction cost a front page once: one
+        # unreadable wig in a corpus of one rendered the empty state,
+        # so the index cheerfully announced that nothing had ever
+        # landed here.
+        parts.append(EMPTY if not unreadable else "\n")
+        parts.append(unreadable_section(unreadable))
         return "".join(parts).rstrip() + "\n"
 
     # Most proven first, then alphabetical so the order is stable.
@@ -126,19 +168,13 @@ def build(root: Path, mods) -> str:
 
     parts.append(
         f"\n{len(rows)} wig(s).\n\n"
-        "| Brand | Kind | Model | Wig | Fittings | Fitted by | Identifiers |\n"
-        "|---|---|---|---|---:|---|---|\n"
+        "| Brand | Kind | Model | Wig | Fittings | Covered | Fitted by | Identifiers |\n"
+        "|---|---|---|---|---:|---:|---|---|\n"
     )
     parts.append("\n".join(row for row, _, _ in rows))
     parts.append("\n")
 
-    if unreadable:
-        parts.append(
-            "\n## Not readable\n\nThese files did not parse and are "
-            "left out of the table above:\n\n"
-        )
-        parts.append("\n".join(f"- `{p}`" for p in unreadable))
-        parts.append("\n")
+    parts.append(unreadable_section(unreadable))
 
     parts.append(FOOTER)
     return "".join(parts).rstrip() + "\n"
