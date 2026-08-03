@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 env:
-  HAIR_REF: v0.8.9
+  HAIR_REF: v0.9.5
 
 jobs:
   validate:
