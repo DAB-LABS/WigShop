@@ -13,17 +13,11 @@ eligible for [WigFactory](https://github.com/DAB-LABS/WigFactory).
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
 
-1 wig(s).
+## No wigs yet
 
-| Brand | Kind | Model | Wig | Fittings | Fitted by | Identifiers |
-|---|---|---|---|---:|---|---|
-| Sanmli | candles | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 1 | David | asin: B0DF7FPV55; oem: Sanmli; upc: 794969274724 |
+The shop is open and nothing has landed in it.
 
----
-
-**Kind** says what the device is, and it is what most people search by.
-**Identifiers** are FCC IDs, UPCs and ASINs, which are how hardware with
-no meaningful brand stays findable.
-
-Nothing here was accepted on somebody's word. Every row was proven on
-real hardware by the people named in its fittings.
+If you have a remote working in HAIR, you are most of the way there.
+Fit it, download it, and open a pull request:
+[CONTRIBUTING.md](CONTRIBUTING.md). The first entry is the one everyone
+else copies.
