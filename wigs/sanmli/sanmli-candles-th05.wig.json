@@ -1,176 +1,101 @@
 {
-    "format": "hair-wig/3",
+    "format": "hair-wig/1",
     "name": "Candles (Tea Light)",
-    "wig_id": "c1305c7d-a4b2-43ee-90b7-7f36d7d0eb8c",
     "brand": "Sanmli",
     "model": "TH-05",
-    "kind": "light",
+    "kind": "candles",
+    "notes": "From Amazon",
     "origin": "device",
     "identifiers": {
         "upc": "794969274724",
-        "asin": "B0DF7FPV55"
+        "asin": "B0DF7FPV55",
+        "oem": "Sanmli"
     },
     "signals": [
         {
             "alias": "On",
-            "pronto": "0000 006D 000C 0000 001C 0025 003B 0046 001A 0022 001E 0022 001E 0022 001E 0022 003E 0023 001D 0023 001D 0022 001E 0022 001E 0043 001D 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000C 0000 001C 0025 003B 0046 001A 0022 001E 0022 001E 0022 001E 0022 003E 0023 001D 0023 001D 0022 001E 0022 001E 0043 001D 017C"
         },
         {
             "alias": "Off",
-            "pronto": "0000 006D 000B 0000 001D 0022 003E 0041 001F 0021 001F 0022 001E 0021 001E 0021 003D 0022 001E 0041 003E 0022 001E 0021 001E 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 001D 0022 003E 0041 001F 0021 001F 0022 001E 0021 001E 0021 003D 0022 001E 0041 003E 0022 001E 0021 001E 017C"
         },
         {
             "alias": "SL (Candle Like)",
-            "pronto": "0000 006D 000B 0000 001F 0021 003F 0040 001F 0021 001F 0021 001F 0021 001F 0021 003F 0021 001E 0041 001F 0021 003F 0021 001F 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 001F 0021 003F 0040 001F 0021 001F 0021 001F 0021 001F 0021 003F 0021 001E 0041 001F 0021 003F 0021 001F 017C"
         },
         {
             "alias": "Light (Solid Light)",
-            "pronto": "0000 006D 000B 0000 001F 0020 0040 0041 001F 0020 0020 0021 001F 0020 0020 0020 003F 0021 001F 0040 0020 0020 001F 0020 003F 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 001F 0020 0040 0041 001F 0020 0020 0021 001F 0020 0020 0020 003F 0021 001F 0040 0020 0020 001F 0020 003F 017C"
         },
         {
             "alias": "8 Hour",
-            "pronto": "0000 006D 000B 0000 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 0020 0020 001F 0020 0040 0040 003F 0021 001F 0040 0040 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 0020 0020 001F 0020 0040 0040 003F 0021 001F 0040 0040 017C"
         },
         {
             "alias": "6 Hour",
-            "pronto": "0000 006D 000C 0000 001F 0021 003E 0040 001F 0021 001F 0022 001E 0021 001F 0021 001E 0021 003F 0022 001F 0020 001E 0021 001E 0021 001F 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000C 0000 001F 0021 003E 0040 001F 0021 001F 0022 001E 0021 001F 0021 001E 0021 003F 0022 001F 0020 001E 0021 001E 0021 001F 017C"
         },
         {
             "alias": "4 Hour",
-            "pronto": "0000 006D 000C 0000 001F 0020 0020 0020 001F 0020 0020 0020 0020 0020 0020 0020 0020 0020 003F 0020 0020 0020 0020 0040 0040 0020 0020 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000C 0000 001F 0020 0020 0020 001F 0020 0020 0020 0020 0020 0020 0020 0020 0020 003F 0020 0020 0020 0020 0040 0040 0020 0020 017C"
         },
         {
             "alias": "Brighten Up",
-            "pronto": "0000 006D 000B 0000 001F 0021 003E 0041 001F 0021 001E 0021 001F 0021 001E 0021 003F 0021 001F 0041 003F 0040 001F 0021 001F 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 001F 0021 003E 0041 001F 0021 001E 0021 001F 0021 001E 0021 003F 0021 001F 0041 003F 0040 001F 0021 001F 017C"
         },
         {
             "alias": "Dim Down",
-            "pronto": "0000 006D 000A 0000 001F 0021 003F 0040 001F 0021 001F 0020 001F 0021 001E 0021 003F 0021 001E 0041 003F 0041 003E 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000A 0000 001F 0021 003F 0040 001F 0021 001F 0020 001F 0021 001E 0021 003F 0021 001E 0041 003F 0041 003E 017C"
         },
         {
             "alias": "BL (Fade Out)",
-            "pronto": "0000 006D 000B 0000 0021 001F 0041 003F 0020 0020 0021 001F 0021 001F 0021 001F 0041 001F 0021 001F 0021 003F 0021 001F 0041 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000B 0000 0021 001F 0041 003F 0020 0020 0021 001F 0021 001F 0021 001F 0041 001F 0021 001F 0021 003F 0021 001F 0041 017C"
         },
         {
             "alias": "2 Hour",
-            "pronto": "0000 006D 000C 0000 0020 001F 0020 0020 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 003F 0041 003F 0020 001F 0020 0020 0020 001F 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000C 0000 0020 001F 0020 0020 001F 0020 001F 0020 001F 0021 001F 0021 001F 0020 003F 0041 003F 0020 001F 0020 0020 0020 001F 017C"
         },
         {
             "alias": "FL (Flicker)",
-            "pronto": "0000 006D 000C 0000 0020 0021 0020 0021 0020 0021 001F 0022 0020 0021 0020 0021 001F 0022 0040 0021 001F 0022 0020 0021 0020 0040 0041 017C",
-            "send_count": 3,
-            "ditto_count": 1,
-            "bypass_protocol": false
+            "pronto": "0000 006D 000C 0000 0020 0021 0020 0021 0020 0021 001F 0022 0020 0021 0020 0021 001F 0022 0040 0021 001F 0022 0020 0021 0020 0040 0041 017C"
         }
     ],
     "fittings": [
         {
-            "wig_id": "c1305c7d-a4b2-43ee-90b7-7f36d7d0eb8c",
-            "handle": "David Bailey",
-            "github": "DAB-LABS",
-            "date": "2026-08-03",
-            "rows": [
-                {
-                    "alias_at_claim": "On",
-                    "digest": "a4b1e167f1730730",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "Off",
-                    "digest": "87d4c6dafe2fe1b7",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "SL (Candle Like)",
-                    "digest": "b0e0fbc1cb20efbb",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "Light (Solid Light)",
-                    "digest": "a0a828a08b11e59d",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "8 Hour",
-                    "digest": "c68fbaed9d3504ea",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "6 Hour",
-                    "digest": "73a1c0fec79133dd",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "4 Hour",
-                    "digest": "b668b875e1c28a44",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "Brighten Up",
-                    "digest": "f929b27720f03bee",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "Dim Down",
-                    "digest": "54abb21de17a49b9",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "BL (Fade Out)",
-                    "digest": "ddb6a1fb261da5b0",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "2 Hour",
-                    "digest": "d42e74bff1e6dd7d",
-                    "verdict": "worked"
-                },
-                {
-                    "alias_at_claim": "FL (Flicker)",
-                    "digest": "f9b1685e3d318270",
-                    "verdict": "worked"
-                }
+            "handle": "David",
+            "date": "2026-07-31",
+            "content_hash": "sha256:50e076e9623326a4eb9a500572c20d98296f840cccf8f4caadce6314dafd2731",
+            "confirmed": [
+                "On",
+                "SL (Candle Like)",
+                "Light (Solid Light)",
+                "8 Hour",
+                "6 Hour",
+                "4 Hour",
+                "Dim Down",
+                "Brighten Up",
+                "BL (Fade Out)",
+                "2 Hour",
+                "FL (Flicker)",
+                "Off"
             ],
+            "failed": [],
+            "hair_version": "0.9.1",
+            "ha_version": "2026.7.2",
+            "github": "DAB-LABS",
+            "note": "Verified against 0.9.1 and pre-combed.",
+            "emitter": "broadlink",
+            "receiver": "esphome",
+            "signals_heard": 8,
+            "send_times_used": 4,
             "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
-            "sig": "LzG1g7MqbT1IYhp9zwi0cnEot9BHV/VvFAytTg8HZ++VUqoEYr+CYsgZHxpp+QAq9LG+uVJP+WCl0ez0wduBCA=="
+            "sig": "QfYLjFbKh09af2k14iyHQQyAddxs150FKErl+Cde9g+MLzgUlHloCaT/9WFRPbQySYW+/JUPOzigWWabOCz7BA=="
         }
     ],
     "comb": {
         "version": 1,
-        "date": "2026-08-03",
+        "date": "2026-07-31",
         "suspects": 0,
         "counts": {},
         "findings": []
