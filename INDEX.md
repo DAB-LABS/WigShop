@@ -23,7 +23,7 @@ product identifier.
 
 | Brand | Kind | Model | Wig | Fittings | Covered | Fitted by | Identifiers |
 |---|---|---|---|---:|---:|---|---|
-| Sanmli | light | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 1 | 12/12 | David Bailey | asin: B0DF7FPV55; upc: 794969274724 |
+| Sanmli | light | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 2 | 12/12 | David B, David Bailey | asin: B0DF7FPV55; upc: 794969274724 |
 
 ---
 
