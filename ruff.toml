@@ -1,0 +1,14 @@
+# The shop's Python is two scripts and their tests. House style is the
+# same 79 columns the prose wraps at, so a diff reads the same width
+# wherever you open it.
+line-length = 79
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "I", "B", "UP", "RUF"]
+
+[lint.per-file-ignores]
+# Both tools put the repo's own directory on sys.path before importing
+# from it, which is the whole point of the import order there.
+"tools/build_index.py" = ["E402"]
+"tests/*" = ["E402"]

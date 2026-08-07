@@ -12,20 +12,36 @@ Usage:
     validate_wigs.py --hair-src PATH [--base-ref REF] [FILE ...]
 
 With FILE arguments it validates exactly those wigs, and, when
-``--base-ref`` names a git ref where a file already exists, also checks
-what only means anything against a previous version: what a changed row
-cost in orphaned claims, and that no fitting went missing.
+``--base-ref`` names a git ref, also runs the checks that only mean
+anything against what is already merged: what a changed row cost in
+orphaned claims, that no fitting went missing, and the ancestry walk
+that tells a supersession from a stale attestation.
 
 With no FILE arguments it validates every wig in ``wigs/``.
 
-Exit code is 0 when nothing failed, 1 otherwise. Warnings never fail
-the run; they are there for a human to glance at.
+Exit code is 0 when nothing failed, 1 otherwise. Warnings and notes
+never fail the run; they are there for a human to read.
+
+The shop's shelf holds current descriptions of devices, wholly proven.
+Three things follow, and most of this file is one of them:
+
+- **Perfect fits only.** A wig lands when at least one person has
+  claimed every row of it worked on their own hardware. Wig-level, not
+  bundle-level: an honest partial attestation may ride alongside, it
+  just cannot open the door.
+- **Identity is the signing key.** One person, one current word. A
+  re-fit from the same install replaces that person's earlier bundle
+  rather than stacking a duplicate, so a legitimate re-attestation PR
+  shows one bundle removed and one added carrying the same key.
+- **Content changes arrive as supersession.** A changed wig is a new
+  wig with a new id that names its ancestor in ``supersedes``. The old
+  file leaves the shelf and its ledger retires with it.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
+import hashlib
 import os
 import re
 import subprocess
@@ -43,15 +59,34 @@ UNBRANDED = "unbranded"
 BRAND_FOLDER_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 FILENAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 
+# HAIR composes a download name from the wig's own fields and appends
+# the fitting tier, hyphenated, so the file drops into the shop with no
+# rename. The suffixes are listed here ONLY so the docs and the tests
+# can name them. Nothing in this file reads a tier from a filename: a
+# name that could promote a file by being edited would defeat the point
+# of signed per-row claims. Claims are the evidence, always.
+TIER_SUFFIXES = ("-perfect-fit", "-fitted")
+
 
 @dataclass
 class Report:
-    """Everything one run found, grouped by the file it came from."""
+    """Everything one run found, grouped by the file it came from.
+
+    Three levels. Failures block. Warnings are for a human to weigh.
+    Notes are the deterministic readouts a reviewing agent works from:
+    what a supersession actually changed, who re-attested. They carry no
+    judgement at all, which is the point -- the reviewer spends its
+    judgement on whether the story fits, never on re-deriving the
+    comparison.
+    """
 
     failures: dict[str, list[str]] = field(
         default_factory=lambda: defaultdict(list)
     )
     warnings: dict[str, list[str]] = field(
+        default_factory=lambda: defaultdict(list)
+    )
+    notes: dict[str, list[str]] = field(
         default_factory=lambda: defaultdict(list)
     )
     checked: int = 0
@@ -61,6 +96,9 @@ class Report:
 
     def warn(self, path: str, message: str) -> None:
         self.warnings[path].append(message)
+
+    def note(self, path: str, message: str) -> None:
+        self.notes[path].append(message)
 
     @property
     def ok(self) -> bool:
@@ -121,19 +159,38 @@ def git_show(ref: str, path: str) -> str | None:
     return result.stdout
 
 
+def git_list_wigs(ref: str) -> list[str]:
+    """Every wig on the shelf at ``ref``, as repo-relative posix paths.
+
+    The ancestry walk needs the WHOLE shelf, not the file in front of
+    it. A supersession pairs by ``wig_id`` rather than by path, so the
+    successor to a wig whose kind or model changed arrives at a name
+    nothing in the diff connects to its ancestor.
+    """
+    result = subprocess.run(
+        ["git", "ls-tree", "-r", "--name-only", ref, "--", WIGS_DIR],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        return []
+    return sorted(
+        line.strip()
+        for line in result.stdout.splitlines()
+        if line.strip().endswith(WIG_SUFFIX)
+    )
+
+
 def github_key(value: object) -> str | None:
     """The canonical form of a GitHub handle, for comparison only.
 
     People type this field by hand, so the same account arrives as
-    ``dab``, ``@dab``, ``DAB`` and ``github.com/dab``. Left alone, one
-    person on two installs reads as two distinct contributors, which is
-    exactly what the factory's three-distinct-handles gate is supposed
-    to prevent.
+    ``dab``, ``@dab``, ``DAB`` and ``github.com/dab``.
 
-    This never rewrites a file. Fittings are signed over their own
+    This never rewrites a file. Bundles are signed over their own
     contents, so normalizing ``@dab`` to ``dab`` on disk would break the
-    signature and violate the immutability rule at the same time. The
-    canonical form exists to compare with, not to store.
+    signature. The canonical form exists to compare with, not to store.
 
     Case-folded because GitHub usernames are case-insensitive, and the
     leading ``@`` is dropped because it is not a legal username
@@ -157,318 +214,56 @@ def github_key(value: object) -> str | None:
     # Keep the first segment only. Without this the key comes back as
     # "name/repo", which is not merely useless, it is wrong: it makes
     # one account look like a different contributor from the same
-    # account typed plainly, which is the exact failure this function
-    # exists to prevent.
+    # account typed plainly.
     for sep in ("/", "?", "#"):
         text = text.split(sep, 1)[0]
     return text.strip().casefold() or None
 
 
-def fitting_identities(bundle) -> set[str]:
-    """Every handle by which one person's bundle can be recognised.
+def bundle_identity(bundle) -> str:
+    """Who made this bundle. ONE key, and it is the signing key.
 
-    A SET rather than a single key, and matched by intersection,
-    because the thing this feeds is the check that refuses a pull
-    request for deleting somebody else's fitting. That check is worth
-    having and its false positive is vicious: it tells a contributor
-    they attested a stale download when they did nothing of the sort,
-    and there is no edit they can make to their own file that answers
-    it.
+    Ruled on HAIR's bench 2026-08-06 and shipped in 0.9.7: one person,
+    one current word. A fitter re-attesting an unchanged wig from the
+    same install REPLACES their earlier bundle rather than appending a
+    second, and "the same install" means the same ed25519 key. The typed
+    handle is display prose.
 
-    So identity is generous on purpose. A person who reinstalls Home
-    Assistant signs with a new key, and a person who tidies their
-    display name changes their handle; either would look like a
-    stranger arriving and the original vanishing if identity rested on
-    one field. This repo has already seen the handle case, with the
-    same install attesting first as "David" and later as "David
-    Bailey".
+    This replaced a generous set-of-aliases match that compared by
+    intersection over key, GitHub account and display name. That was
+    written to protect against a false "you deleted somebody's fitting"
+    accusation, and it over-corrected into a hole that the shop's own
+    corpus demonstrates: the Sanmli wig carries two bundles from two
+    installs that both typed ``DAB-LABS``, so deleting either one left
+    the other satisfying its identity and the deletion went unreported.
 
-    Two strangers who both attest unsigned, with no GitHub account and
-    the same display name, will read as one person. That is the right
-    way to be wrong here: the cost is a duplicate nobody is warned
-    about, against falsely accusing somebody of destroying work.
+    Keys close that hole without reopening the false positive, because
+    the case the old code feared no longer exists. Somebody who
+    reinstalls Home Assistant signs with a new key, so current HAIR
+    appends their new bundle beside the old one instead of replacing it,
+    and both are present in the file they upload. Nothing goes missing,
+    so nothing gets accused.
+
+    Unsigned bundles fall back to the GitHub account, then the display
+    name, then a digest of the rows they claim. The last is a poor
+    identity and is meant to be: an unsigned, unnamed, accountless
+    bundle has told us nothing to recognise it by, and matching it on
+    its own content at least makes its disappearance visible.
     """
-    out = set()
-    if bundle.key:
-        out.add(f"key:{bundle.key.strip()}")
+    if bundle.key and bundle.key.strip():
+        return f"key:{bundle.key.strip()}"
     account = github_key(bundle.github)
     if account:
-        out.add(f"gh:{account}")
+        return f"gh:{account}"
     if bundle.handle and bundle.handle.strip():
-        out.add(f"name:{bundle.handle.strip().casefold()}")
-    return out
+        return f"name:{bundle.handle.strip().casefold()}"
+    rows = ",".join(sorted(f"{r.digest}:{r.verdict}" for r in bundle.rows))
+    return f"rows:{hashlib.sha256(rows.encode('utf-8')).hexdigest()[:16]}"
 
 
-def check_claims(rel_path: str, wig, mods, report: Report) -> None:
-    """Everything the shop asks of a wig's attestations.
-
-    Under hair-wig/3 a fitting is a signed bundle of per-row claims,
-    each binding one row's transmit recipe by digest. Every judgment
-    here is HAIR's: ``claims_of``, ``wig_row_digests``,
-    ``bundle_is_complete``, ``coverage`` and ``verify_fitting`` are all
-    imported, so a wig that reads perfect here reads perfect in the
-    Closet. The shop adds exactly one idea of its own, and names it
-    something HAIR does not use.
-
-    Three words doing three jobs, deliberately not interchangeable:
-
-    - **Admitted**: every current row carries some claim. The shop's
-      entry gate, and only the shop's. HAIR has no such concept, which
-      is why it does not borrow HAIR's word.
-    - **Perfect**: one person claimed every current row worked. HAIR's
-      ``bundle_is_complete``, and what the Fittings column counts.
-    - **Covered**: the union of rows anybody proved worked. HAIR's
-      ``coverage``, which its own docstring hands to the shop as
-      judgement rather than a green check.
-
-    The distinction is load-bearing. Three people who each proved a
-    different third have not, between them, produced anybody who can
-    say the whole wig works, so coverage must never be allowed to read
-    as proof the way a perfect fit does.
-    """
-    wf = mods["wig_format"]
-    wfit = mods["wig_fitting"]
-    fsign = mods["fitting_signing"]
-
-    raw_entries = wig.extra.get("fittings")
-    raw_entries = raw_entries if isinstance(raw_entries, list) else []
-
-    # Legacy fittings are refused, not converted (owner ruling
-    # 2026-08-03). A whole-file hash says "these bytes, all of them" and
-    # carries nothing about which rows anybody proved, so minting claims
-    # from one would manufacture evidence nobody gave. HAIR drops them on
-    # import and the shop says so out loud rather than letting a wig look
-    # attested when its proof no longer counts anywhere.
-    #
-    # The test is the SHAPE, never the format stamp. Files exist that
-    # stamp hair-wig/3 and carry old-shape fittings, so trusting the
-    # major would admit exactly what this refuses.
-    legacy = [e for e in raw_entries if wf.is_legacy_fitting(e)]
-    if legacy:
-        who = ", ".join(
-            sorted(
-                repr(str(e.get("handle", "?")))
-                for e in legacy
-                if isinstance(e, dict)
-            )
-        )
-        report.fail(
-            rel_path,
-            f"{len(legacy)} fitting(s) ({who}) use the pre-claims format. "
-            "They cannot be converted, because a whole-file hash does not "
-            "record which rows anybody proved. Import this wig into HAIR "
-            "0.9.5 or newer, live with the device, and save it to the "
-            "closet again to attest it under the claims model",
-        )
-
-    bundles = wf.claims_of(wig)
-    if not bundles:
-        # Only when there is nothing at all. A wig carrying legacy
-        # entries has already been told exactly what is wrong with it,
-        # and "no fitting" on a file that visibly contains one reads as
-        # the tool being confused rather than the wig being wrong.
-        if not legacy:
-            report.fail(
-                rel_path,
-                "no fitting. Every wig in the shop was proven on real "
-                "hardware first; see CONTRIBUTING.md",
-            )
-        return
-
-    matrix = wig.climate is not None
-    digests = wf.wig_row_digests(wig)
-    live = set(digests)
-
-    # Pair each bundle with the raw entry it came from: verify_fitting
-    # checks a signature over the raw JSON, not over the parsed object.
-    pairs = []
-    for entry in raw_entries:
-        if not wf.is_claims_bundle(entry):
-            continue
-        bundle = wf.parse_claims_bundle(entry)
-        if bundle is not None:
-            pairs.append((entry, bundle))
-
-    seen_handles: dict[str, list[str]] = defaultdict(list)
-    seen_accounts: dict[str, list[str]] = defaultdict(list)
-    fingerprints: dict[str, set[str]] = defaultdict(set)
-    wont_work: dict[str, list[str]] = defaultdict(list)
-
-    perfect = 0
-    unclaimed_by_any = set(digests)
-
-    for entry, bundle in pairs:
-        who = bundle.handle or "(unnamed)"
-        seen_handles[who.strip().casefold()].append(who)
-        account = github_key(bundle.github)
-        if account:
-            seen_accounts[account].append(who)
-
-        # A bundle carries its own wig id inside the signed bytes, while
-        # the file's is outside every digest and therefore unsigned. If
-        # the two disagree, this bundle was written about a different
-        # wig: the signature still verifies, because it covers the
-        # bundle rather than the file it is sitting in, so nothing else
-        # here would catch it. Two files sharing a code set (rebadged
-        # hardware, a fork, a converted SmartIR entry) would otherwise
-        # let a bundle be copied across and read as proof.
-        if (bundle.wig_id or "").strip() != (wig.wig_id or "").strip():
-            report.fail(
-                rel_path,
-                f"fitting {who!r} claims wig_id {bundle.wig_id!r}, but "
-                f"this file is {wig.wig_id!r}. A bundle is signed over "
-                "itself, not over the file it rides in, so a bundle "
-                "moved between wigs still verifies. This one is "
-                "attesting something else",
-            )
-
-        verdict = fsign.verify_fitting(entry)
-        if verdict == fsign.SIGNED_INVALID:
-            report.fail(
-                rel_path,
-                f"fitting {who!r} carries a signature that does not "
-                "verify. The record was altered after it was recorded",
-            )
-        elif verdict is None:
-            report.warn(
-                rel_path,
-                f"fitting {who!r} is unsigned. Valid, just self-reported",
-            )
-
-        if bundle.key:
-            fp = fsign.key_fingerprint(bundle.key)
-            if fp:
-                fingerprints[fp].add(account or who)
-
-        for row in bundle.rows:
-            if row.verdict == wf.VERDICT_WONT_WORK:
-                wont_work[row.digest].append(who)
-
-        if wfit.bundle_is_complete(bundle, wig, digests):
-            perfect += 1
-
-        if matrix:
-            # A checklist samples a lattice rather than walking it, so
-            # the bundle pins the lattice it sampled. Per-row presence is
-            # not a question that can be asked here: a matrix wig has no
-            # flat row digests by design.
-            if not bundle.cells_hash:
-                report.warn(
-                    rel_path,
-                    f"fitting {who!r} carries no cells_hash, so there is "
-                    "no way to tell which lattice its checklist vouched "
-                    "for",
-                )
-            elif bundle.cells_hash != wf.cells_content_hash(wig.climate):
-                report.fail(
-                    rel_path,
-                    f"fitting {who!r} vouched for a different lattice "
-                    f"(cells_hash {bundle.cells_hash}). The matrix "
-                    "changed after it was attested, and a checklist that "
-                    "sampled the old one says nothing about this one",
-                )
-            continue
-
-        claimed = {row.digest for row in bundle.rows}
-        unclaimed_by_any -= claimed
-
-        orphans = [row for row in bundle.rows if row.digest not in live]
-        if orphans:
-            names = ", ".join(
-                repr(r.alias_at_claim) for r in orphans[:5]
-            )
-            more = f" and {len(orphans) - 5} more" if len(orphans) > 5 else ""
-            report.warn(
-                rel_path,
-                f"fitting {who!r} has {len(orphans)} orphaned claim(s) "
-                f"({names}{more}): rows it proved that the wig no longer "
-                "carries. Kept deliberately, since they are somebody's "
-                "signed statement about bytes that were once here, but "
-                "worth reading before merging",
-            )
-
-    if not matrix:
-        # The shop's entry gate. Deliberately NOT called complete: HAIR
-        # owns that word for one person covering every row, and two
-        # definitions of one word is how verifiers drift apart.
-        if unclaimed_by_any:
-            missing = sorted(unclaimed_by_any)
-            aliases = [
-                s.alias
-                for s in wig.signals
-                if wf.signal_row_digest(s) in unclaimed_by_any
-            ]
-            shown = ", ".join(repr(a) for a in aliases[:5])
-            more = f" and {len(missing) - 5} more" if len(missing) > 5 else ""
-            report.fail(
-                rel_path,
-                f"{len(missing)} row(s) carry no claim at all "
-                f"({shown}{more}). Every row needs somebody's verdict, "
-                "even if that verdict is that the button is not on their "
-                "hardware. Fit the wig on the device and save it to the "
-                "closet again",
-            )
-
-        covered = wf.coverage(bundles, digests)
-        if perfect == 0:
-            report.warn(
-                rel_path,
-                f"no perfect fit: {len(covered)} of {len(digests)} row(s) "
-                "are proven working, but nobody has covered the whole wig "
-                "on their own hardware. Admitted and honest, and the "
-                "Fittings count stays at 0 until somebody does",
-            )
-
-    for names in seen_handles.values():
-        if len(names) > 1:
-            report.warn(
-                rel_path,
-                f"handle {names[0]!r} appears on {len(names)} fittings. "
-                "A person re-attesting should replace their own bundle "
-                "rather than add a second one, so this is worth a look",
-            )
-
-    for account, names in seen_accounts.items():
-        if len(names) > 1:
-            shown = ", ".join(repr(n) for n in sorted(set(names)))
-            report.warn(
-                rel_path,
-                f"fittings {shown} all give the GitHub handle "
-                f"{account!r}, so they look like one person under "
-                "different names. Not a failure, but they should not "
-                "count as independent proof at promotion",
-            )
-
-    for fp, accounts in fingerprints.items():
-        if len(accounts) > 1:
-            report.warn(
-                rel_path,
-                f"fittings by {sorted(accounts)} share signing key "
-                f"{fp}, so they came from one install. Not a failure, "
-                "worth a look before this counts as independent proof",
-            )
-
-    # The reason the exclusion reasons are an enum rather than free
-    # text: several people reporting wont_work on the SAME recipe is a
-    # mechanical signal that the code is wrong for a hardware revision,
-    # which no amount of reading prose would surface reliably.
-    for digest, names in wont_work.items():
-        if len(set(names)) > 1:
-            alias = next(
-                (
-                    s.alias
-                    for s in wig.signals
-                    if wf.signal_row_digest(s) == digest
-                ),
-                digest,
-            )
-            report.warn(
-                rel_path,
-                f"{len(set(names))} fitters report {alias!r} does not "
-                f"work on their hardware ({', '.join(sorted(set(names)))}). "
-                "One person is a hardware revision; several is a sign the "
-                "code itself is wrong",
-            )
+def who(bundle) -> str:
+    """A bundle's name for a human, never for matching."""
+    return bundle.handle or bundle.github or "(unnamed)"
 
 
 def check_path_shape(rel_path: str, report: Report) -> str | None:
@@ -502,6 +297,14 @@ def check_path_shape(rel_path: str, report: Report) -> str | None:
             f"filename stem {stem!r} must be lowercase ascii letters, "
             "digits and single hyphens",
         )
+    elif brand_folder == UNBRANDED:
+        # The brand prefix exists so a file sitting in somebody's
+        # Downloads carries its brand. A wig with no brand has none to
+        # carry, and HAIR names its download from the wig's own fields:
+        # with no brand it falls back to the slug of the wig's name, so
+        # demanding an "unbranded-" prefix would send the first
+        # unbranded contributor off to rename a file for no reason.
+        pass
     elif not stem.startswith(f"{brand_folder}-") and stem != brand_folder:
         report.fail(
             rel_path,
@@ -512,68 +315,291 @@ def check_path_shape(rel_path: str, report: Report) -> str | None:
     return brand_folder
 
 
-def check_wig(
-    rel_path: str,
-    text: str,
-    brand_folder: str | None,
-    mods,
-    report: Report,
-) -> tuple[object, str] | None:
-    """Parse and check one wig. Returns (wig, content_hash) when usable."""
-    wf = mods["wig_format"]
+def check_claims(rel_path: str, wig, mods, report: Report) -> None:
+    """Everything the shop asks of a wig's attestations.
 
-    raw_bytes = len(text.encode("utf-8"))
-    if raw_bytes > wf.MAX_WIG_BYTES:
+    Under hair-wig/3 a fitting is a signed bundle of per-row claims,
+    each binding one row's transmit recipe by digest. Every judgment
+    here is HAIR's: ``claims_of``, ``wig_row_digests``,
+    ``bundle_is_complete``, ``coverage`` and ``verify_fitting`` are all
+    imported, so a wig that reads perfect here reads perfect in the
+    Closet.
+
+    **The gate is perfect fits only** (owner ruling 2026-08-04), and it
+    is HAIR's word used HAIR's way: ``bundle_is_complete`` is true when
+    one bundle claims every current row worked. Wig-level, not
+    bundle-level -- the wig must be perfect, individual bundles need
+    not be, so an honest scoped attestation can ride alongside a whole
+    proof without either one lying about the other.
+
+    The shop deliberately keeps no vocabulary of its own here. An
+    earlier gate admitted a wig when every row carried SOME claim and
+    called that "admitted", which needed three words for three states.
+    One gate needs one word, and it is already taken.
+    """
+    wf = mods["wig_format"]
+    wfit = mods["wig_fitting"]
+    fsign = mods["fitting_signing"]
+
+    raw_entries = wig.extra.get("fittings")
+    raw_entries = raw_entries if isinstance(raw_entries, list) else []
+
+    # Legacy fittings are refused, not converted (owner ruling
+    # 2026-08-03). A whole-file hash says "these bytes, all of them" and
+    # carries nothing about which rows anybody proved, so minting claims
+    # from one would manufacture evidence nobody gave.
+    #
+    # The test is the SHAPE, never the format stamp. Files exist that
+    # stamp hair-wig/3 and carry old-shape fittings, so trusting the
+    # major would admit exactly what this refuses.
+    legacy = [e for e in raw_entries if wf.is_legacy_fitting(e)]
+    if legacy:
+        named = ", ".join(
+            sorted(
+                repr(str(e.get("handle", "?")))
+                for e in legacy
+                if isinstance(e, dict)
+            )
+        )
         report.fail(
             rel_path,
-            f"file is {raw_bytes} bytes, over the "
-            f"{wf.MAX_WIG_BYTES} byte cap",
+            f"{len(legacy)} fitting(s) ({named}) use the pre-claims "
+            "format. They cannot be converted, because a whole-file hash "
+            "does not record which rows anybody proved. Import this wig "
+            "into HAIR 0.9.5 or newer, live with the device, and save it "
+            "to the closet again to attest it under the claims model",
         )
-        return None
 
-    result = wf.parse_wig(text)
-    if not result.ok or result.wig is None:
-        for err in result.errors:
-            report.fail(rel_path, err)
-        return None
+    # Pair each bundle with the raw entry it came from: verify_fitting
+    # checks a signature over the raw JSON, not over the parsed object.
+    pairs = []
+    for entry in raw_entries:
+        if not wf.is_claims_bundle(entry):
+            continue
+        bundle = wf.parse_claims_bundle(entry)
+        if bundle is not None:
+            pairs.append((entry, bundle))
 
-    wig = result.wig
-    content_hash = wf.wig_content_hash(wig)
-
-    check_claims(rel_path, wig, mods, report)
-
-    check_comb(rel_path, wig, report)
-
-    if brand_folder == UNBRANDED:
-        values = []
-        for key in (wig.identifiers or {}):
-            values.extend(wf.identifier_values(wig.identifiers, key))
-        if not values:
+    if not pairs:
+        # Only when there is nothing at all. A wig carrying legacy
+        # entries has already been told exactly what is wrong with it,
+        # and "no fitting" on a file that visibly contains one reads as
+        # the tool being confused rather than the wig being wrong.
+        if not legacy:
             report.fail(
                 rel_path,
-                "wigs in unbranded/ must carry at least one entry in "
-                "identifiers (fcc_id, upc or asin) so the hardware "
-                "stays findable",
+                "no fitting. Every wig in the shop was proven on real "
+                "hardware first; see CONTRIBUTING.md",
+            )
+        return
+
+    matrix = wig.climate is not None
+    digests = wf.wig_row_digests(wig)
+    live = set(digests)
+    lattice = wf.cells_content_hash(wig.climate) if matrix else None
+
+    by_identity: dict[str, list[str]] = defaultdict(list)
+    seen_accounts: dict[str, set[str]] = defaultdict(set)
+    wont_work: dict[str, set[str]] = defaultdict(set)
+    perfect: list[object] = []
+
+    for entry, bundle in pairs:
+        name = who(bundle)
+        identity = bundle_identity(bundle)
+        by_identity[identity].append(name)
+        account = github_key(bundle.github)
+        if account:
+            seen_accounts[account].add(identity)
+
+        # A bundle carries its own wig id inside the signed bytes, while
+        # the file's is outside every digest and therefore unsigned. If
+        # the two disagree, this bundle was written about a different
+        # wig: the signature still verifies, because it covers the
+        # bundle rather than the file it is sitting in, so nothing else
+        # here would catch it. Two files sharing a code set (rebadged
+        # hardware, a fork, a converted SmartIR entry) would otherwise
+        # let a bundle be copied across and read as proof.
+        if (bundle.wig_id or "").strip() != (wig.wig_id or "").strip():
+            report.fail(
+                rel_path,
+                f"fitting {name!r} claims wig_id {bundle.wig_id!r}, but "
+                f"this file is {wig.wig_id!r}. A bundle is signed over "
+                "itself, not over the file it rides in, so a bundle "
+                "moved between wigs still verifies. This one is "
+                "attesting something else",
             )
 
-    if wig.brand and brand_folder and brand_folder != UNBRANDED:
-        squashed = re.sub(r"[^a-z0-9]+", "", wig.brand.lower())
-        folder_squashed = brand_folder.replace("-", "")
-        if squashed != folder_squashed:
+        verdict = fsign.verify_fitting(entry)
+        if verdict == fsign.SIGNED_INVALID:
+            report.fail(
+                rel_path,
+                f"fitting {name!r} carries a signature that does not "
+                "verify. The record was altered after it was recorded",
+            )
+        elif verdict is None:
             report.warn(
                 rel_path,
-                f'brand field is "{wig.brand}" but the folder is '
-                f"{brand_folder}/. Worth confirming that is deliberate",
+                f"fitting {name!r} is unsigned. Valid, just self-reported",
             )
 
-    if not wig.kind:
-        report.warn(
-            rel_path,
-            "no kind set. Kind is what people search for when wigs are "
-            "shared, and the factory uses it for the wrapper platform",
-        )
+        for row in bundle.rows:
+            if row.verdict == wf.VERDICT_WONT_WORK:
+                wont_work[row.digest].add(identity)
 
-    return wig, content_hash
+        complete = wfit.bundle_is_complete(bundle, wig, digests)
+
+        if matrix:
+            # A checklist samples a lattice rather than walking it, so
+            # the bundle pins the lattice it sampled. Per-row presence is
+            # not a question that can be asked here: a matrix wig has no
+            # flat row digests by design.
+            if not bundle.cells_hash:
+                report.warn(
+                    rel_path,
+                    f"fitting {name!r} carries no cells_hash, so there is "
+                    "no way to tell which lattice its checklist vouched "
+                    "for",
+                )
+                complete = False
+            elif bundle.cells_hash != lattice:
+                report.fail(
+                    rel_path,
+                    f"fitting {name!r} vouched for a different lattice "
+                    f"(cells_hash {bundle.cells_hash}). The matrix "
+                    "changed after it was attested, and a checklist that "
+                    "sampled the old one says nothing about this one",
+                )
+                complete = False
+        else:
+            orphans = [r for r in bundle.rows if r.digest not in live]
+            if orphans:
+                shown = ", ".join(repr(r.alias_at_claim) for r in orphans[:5])
+                more = (
+                    f" and {len(orphans) - 5} more" if len(orphans) > 5 else ""
+                )
+                report.warn(
+                    rel_path,
+                    f"fitting {name!r} has {len(orphans)} orphaned "
+                    f"claim(s) ({shown}{more}): rows it proved that the "
+                    "wig no longer carries. Kept deliberately, since they "
+                    "are somebody's signed statement about bytes that "
+                    "were once here, but worth reading before merging",
+                )
+
+        if complete:
+            perfect.append(bundle)
+
+    # One bundle per key per wig, an invariant since HAIR 0.9.7. Two
+    # bundles sharing a key means the submitter's HAIR predates the
+    # replace rule, or the file was hand-edited. Either way the fix is
+    # upstream of this repo.
+    for identity, names in by_identity.items():
+        if len(names) > 1 and identity.startswith("key:"):
+            report.fail(
+                rel_path,
+                f"{len(names)} fittings ({', '.join(sorted(set(names)))}) "
+                f"share one signing key. Since HAIR 0.9.7 a person "
+                "re-fitting a wig replaces their own earlier bundle "
+                "rather than adding a second, so one install can only "
+                "have one current word on one wig. Import this file into "
+                "current HAIR and save it to the closet again to collapse "
+                "them, rather than editing the file by hand",
+            )
+        elif len(names) > 1:
+            report.warn(
+                rel_path,
+                f"{len(names)} unsigned fittings "
+                f"({', '.join(sorted(set(names)))}) "
+                "cannot be told apart, because an unsigned bundle has no "
+                "key to identify it by. Worth confirming they are "
+                "different people",
+            )
+
+    # THE GATE. Perfect fits only: at least one person must have claimed
+    # every row of this wig worked on their own hardware.
+    if not perfect:
+        if matrix:
+            report.fail(
+                rel_path,
+                "no perfect fit. The shop takes a wig when one person has "
+                "vouched for its whole checklist against the lattice this "
+                "file carries. Import it into HAIR, live with the device, "
+                "and save it to the closet with every checklist row "
+                "marked worked",
+            )
+        else:
+            proven = wf.coverage(
+                [b for _, b in pairs], digests
+            )
+            missing = [d for d in digests if d not in proven]
+            aliases = [
+                s.alias
+                for s in wig.signals
+                if wf.signal_row_digest(s) in set(missing)
+            ]
+            shown = ", ".join(repr(a) for a in aliases[:6])
+            more = (
+                f" and {len(missing) - 6} more" if len(missing) > 6 else ""
+            )
+            if missing:
+                detail = (
+                    f"{len(missing)} of {len(digests)} row(s) have nobody "
+                    f"saying they worked: {shown}{more}"
+                )
+            else:
+                # Every row is proven, but by different people. Coverage
+                # is real and worth knowing; it is not a whole witness.
+                detail = (
+                    f"all {len(digests)} rows are proven between "
+                    f"{len(pairs)} fitters, but no single one of them "
+                    "covers the whole wig"
+                )
+            report.fail(
+                rel_path,
+                f"no perfect fit: {detail}. The shop takes a wig when ONE "
+                "person has proven every row on their own hardware -- a "
+                "file where three people each proved a third is a file "
+                "nobody has watched work. Fit the remaining rows and save "
+                "to the closet again. If your hardware revision does not "
+                "have these buttons, do not trim them out of a shared "
+                "wig: save your revision as its own wig, named for what "
+                "it is",
+            )
+
+    # A second GitHub account on a different key is two people or one
+    # person on two installs, and the shop cannot tell which. Not a
+    # failure; it matters only where independence is being counted.
+    for account, identities in seen_accounts.items():
+        if len(identities) > 1:
+            report.warn(
+                rel_path,
+                f"{len(identities)} fittings give the GitHub handle "
+                f"{account!r} from different installs. Not a failure, but "
+                "they should not count as independent proof at promotion",
+            )
+
+    # The reason the exclusion reasons are an enum rather than free
+    # text: several people reporting wont_work on the SAME recipe is a
+    # mechanical signal that the code is wrong for a hardware revision,
+    # which no amount of reading prose would surface reliably. Counted
+    # by key, never by handle -- two "David"s are two people when their
+    # keys differ, and one person is never two.
+    for digest, identities in wont_work.items():
+        if len(identities) > 1:
+            alias = next(
+                (
+                    s.alias
+                    for s in wig.signals
+                    if wf.signal_row_digest(s) == digest
+                ),
+                digest,
+            )
+            report.warn(
+                rel_path,
+                f"{len(identities)} fitters report {alias!r} does not "
+                "work on their hardware. One person is a hardware "
+                "revision; several is a sign the code itself is wrong",
+            )
 
 
 def check_comb(rel_path: str, wig, report: Report) -> None:
@@ -620,9 +646,7 @@ def check_comb(rel_path: str, wig, report: Report) -> None:
     counts = comb.get("counts")
     detail = ""
     if isinstance(counts, dict) and counts:
-        detail = "; ".join(
-            f"{k}: {v}" for k, v in sorted(counts.items())
-        )
+        detail = "; ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
     dated = comb.get("date")
     report.warn(
         rel_path,
@@ -672,33 +696,212 @@ def check_comb(rel_path: str, wig, report: Report) -> None:
         )
 
 
+def check_wig(
+    rel_path: str,
+    text: str,
+    brand_folder: str | None,
+    mods,
+    report: Report,
+) -> tuple[object, str] | None:
+    """Parse and check one wig. Returns (wig, content_hash) when usable."""
+    wf = mods["wig_format"]
+
+    raw_bytes = len(text.encode("utf-8"))
+    if raw_bytes > wf.MAX_WIG_BYTES:
+        report.fail(
+            rel_path,
+            f"file is {raw_bytes} bytes, over the "
+            f"{wf.MAX_WIG_BYTES} byte cap",
+        )
+        return None
+
+    result = wf.parse_wig(text)
+    if not result.ok or result.wig is None:
+        for err in result.errors:
+            report.fail(rel_path, err)
+        return None
+
+    wig = result.wig
+    content_hash = wf.wig_content_hash(wig)
+
+    if not wig.wig_id:
+        # Every wig HAIR writes has carried one since 0.9.5, and claims
+        # bind to it. A file without one was hand-made or came through a
+        # tool that does not mint identities, and nothing downstream --
+        # the ancestry walk, the bundle cross-check -- can place it.
+        report.fail(
+            rel_path,
+            "no wig_id. Every wig HAIR has written since 0.9.5 carries "
+            "one, claims bind to it, and supersession is tracked by it. "
+            "Import this file into HAIR and save it to the closet to "
+            "mint one",
+        )
+
+    check_claims(rel_path, wig, mods, report)
+
+    check_comb(rel_path, wig, report)
+
+    # Orphaned claims are kept on purpose: they are somebody's signed
+    # statement about bytes that were once here, and deleting them
+    # destroys evidence. Nothing prunes them, though, and the format has
+    # a size cap, so a wig repaired often enough across a large lattice
+    # could drift toward it carrying mostly dead claims. Surfaced long
+    # before it can fail.
+    if raw_bytes > wf.MAX_WIG_BYTES // 2:
+        report.warn(
+            rel_path,
+            f"file is {raw_bytes} bytes, over half the "
+            f"{wf.MAX_WIG_BYTES} byte cap. Retired claims are never "
+            "pruned, so a much-repaired wig grows; worth watching",
+        )
+
+    if brand_folder == UNBRANDED:
+        values = []
+        for key in wig.identifiers or {}:
+            values.extend(wf.identifier_values(wig.identifiers, key))
+        if not values:
+            report.fail(
+                rel_path,
+                "wigs in unbranded/ must carry at least one entry in "
+                "identifiers (fcc_id, upc or asin) so the hardware "
+                "stays findable",
+            )
+
+    if wig.brand and brand_folder and brand_folder != UNBRANDED:
+        squashed = re.sub(r"[^a-z0-9]+", "", wig.brand.lower())
+        folder_squashed = brand_folder.replace("-", "")
+        if squashed != folder_squashed:
+            report.warn(
+                rel_path,
+                f'brand field is "{wig.brand}" but the folder is '
+                f"{brand_folder}/. Worth confirming that is deliberate",
+            )
+
+    if not wig.kind:
+        report.warn(
+            rel_path,
+            "no kind set. Kind is what people search for when wigs are "
+            "shared, the factory uses it for the wrapper platform, and "
+            "HAIR composes the download name from it",
+        )
+
+    return wig, content_hash
+
+
+# ---------------------------------------------------------------------------
+# What only means anything against what is already merged
+# ---------------------------------------------------------------------------
+
+
+def row_map(wig, wf) -> dict[str, str]:
+    """Alias to row digest, in file order."""
+    return {s.alias: wf.signal_row_digest(s) for s in wig.signals}
+
+
+def overlap(old_wig, new_wig, wf) -> dict:
+    """What changed between two versions of a wig's rows.
+
+    Pairing is digest first, then alias, which is the rule the format
+    asks for: a claim matches a row by digest alone, so a rename with an
+    unchanged digest costs nothing, while duplicate-payload rows (real
+    devices ship them: Power and Toggle sending the same bytes) must not
+    cross-match on the digest alone when deciding what a human should
+    read.
+    """
+    old_rows = row_map(old_wig, wf)
+    new_rows = row_map(new_wig, wf)
+    old_digests = set(old_rows.values())
+    new_digests = set(new_rows.values())
+
+    identical = old_digests & new_digests
+    shared_alias = set(old_rows) & set(new_rows)
+
+    changed = sorted(a for a in shared_alias if old_rows[a] != new_rows[a])
+    renamed = sorted(
+        a
+        for a in set(new_rows) - shared_alias
+        if new_rows[a] in old_digests
+    )
+    added = sorted(
+        a
+        for a in set(new_rows) - shared_alias
+        if new_rows[a] not in old_digests
+    )
+    removed = sorted(
+        a
+        for a in set(old_rows) - shared_alias
+        if old_rows[a] not in new_digests
+    )
+    return {
+        "identical": len(identical),
+        "total": len(new_rows),
+        "was": len(old_rows),
+        "changed": changed,
+        "renamed": renamed,
+        "added": added,
+        "removed": removed,
+        # Kept apart on purpose. A repaired row and a deleted row both
+        # orphan whatever bound the old recipe, and they are not the
+        # same act: one is the designed path back to the shelf, the
+        # other is the trim-to-green move the perfect-only gate tempts.
+        # Reporting them under one sentence describes somebody's repair
+        # as a haircut.
+        "changed_digests": {old_rows[a] for a in changed},
+        "removed_digests": {old_rows[a] for a in removed},
+    }
+
+
+def overlap_line(ov: dict) -> str:
+    """The deterministic readout a reviewing agent works from."""
+
+    def listed(key: str) -> str:
+        values = ov[key]
+        return ", ".join(repr(v) for v in values) if values else "none"
+
+    return (
+        f"{ov['identical']} of {ov['total']} rows byte-identical "
+        f"(was {ov['was']}); added: {listed('added')}; "
+        f"changed: {listed('changed')}; removed: {listed('removed')}; "
+        f"renamed: {listed('renamed')}"
+    )
+
+
+def claims_cost(old_wig, gone: set[str], wf) -> dict[str, set[str]]:
+    """Whose proof each departing digest carries away."""
+    cost: dict[str, set[str]] = defaultdict(set)
+    for bundle in wf.claims_of(old_wig):
+        for row in bundle.rows:
+            if row.verdict == wf.VERDICT_WORKED and row.digest in gone:
+                cost[row.digest].add(who(bundle))
+    return cost
+
+
 def check_against_base(
     rel_path: str, text: str, base_ref: str, mods, report: Report
 ) -> None:
-    """The rules that only exist relative to what is already merged.
+    """The rules that hold while a wig stays the SAME wig.
 
-    Signals used to be immutable here, because a fitting bound a hash of
-    the whole file and any edit invalidated every one of them at once.
-    Under hair-wig/3 a claim binds ONE row's transmit recipe, so a
-    repair orphans exactly the claims about the row it changed and
-    leaves everyone else's standing. Repair flowing back to the shop is
-    a designed path now, and the review question is no longer "did the
-    codes change" but "what did the change cost, and did anybody
-    re-attest what it broke".
+    Same path, same ``wig_id``: proof accumulating on a stable
+    description. Exactly one thing legitimately changes here, and it is
+    the ledger growing.
 
-    Nothing here fails a pull request for changing a code. It does not
-    need to: a repair that changes a row without re-attesting it leaves
-    that row with no claim, and the entry gate in ``check_claims``
-    refuses it there with a message about the row rather than about the
-    diff. This function's job is to price the change for the human.
+    What fails: a file must carry every bundle the repo's copy already
+    has. Somebody who attests a stale download produces a perfectly
+    clean diff that deletes another person's signed work, and git will
+    not say a word about it.
 
-    What does still fail: a file must carry every bundle the repo's copy
-    already has. Somebody who attests a stale download produces a
-    perfectly clean diff that deletes another person's signed work, and
-    git will not say a word about it.
+    What does NOT fail here: a content change. Under the supersession
+    policy a changed description is a new wig with a new id, so a
+    content change at an unchanged id is not repair-in-place, it is a
+    hand-edited file. It is reported loudly and the ancestry walk in
+    ``check_shelf`` owns the verdict.
+
+    A wig whose id CHANGED at this path is a supersession and this
+    function returns immediately: the ancestor's ledger retires with the
+    ancestor, so a superset check across that boundary would refuse the
+    one PR shape the policy is built around.
     """
     wf = mods["wig_format"]
-    wfit = mods["wig_fitting"]
 
     previous = git_show(base_ref, rel_path)
     if previous is None:
@@ -708,13 +911,18 @@ def check_against_base(
     if not old.ok or old.wig is None:
         report.warn(
             rel_path,
-            f"the copy at {base_ref} does not parse, so the repair and "
-            "fittings-superset checks were skipped",
+            f"the copy at {base_ref} does not parse, so the fittings "
+            "superset and overlap checks were skipped",
         )
         return
 
     new = wf.parse_wig(text)
     if not new.ok or new.wig is None:
+        return
+
+    if (old.wig.wig_id or "") != (new.wig.wig_id or ""):
+        # Supersession. Handled by the ancestry walk, which pairs by id
+        # across the whole shelf rather than by path.
         return
 
     old_bundles = wf.claims_of(old.wig)
@@ -726,22 +934,55 @@ def check_against_base(
     # old model drops entries this check never counted. No exception
     # window to bound, and no standing licence to delete a fitting by
     # relabelling it.
-    present = set().union(*(fitting_identities(b) for b in new_bundles)) \
-        if new_bundles else set()
+    old_by_identity = {bundle_identity(b): b for b in old_bundles}
+    new_by_identity = {bundle_identity(b): b for b in new_bundles}
+
     lost = [
-        b for b in old_bundles
-        if not (fitting_identities(b) & present)
+        b
+        for identity, b in old_by_identity.items()
+        if identity not in new_by_identity
     ]
     if lost:
-        who = ", ".join(sorted(b.handle or "(unnamed)" for b in lost))
+        names = ", ".join(sorted(who(b) for b in lost))
         report.fail(
             rel_path,
             f"this file is missing fittings that are already here "
-            f"({who}). You attested an older copy of the wig. Download "
+            f"({names}). You attested an older copy of the wig. Download "
             "the current file from this repo, import it, live with it, "
             "and save it to the closet again. Nothing is wrong with "
             "your fitting; it just needs to ride alongside the others "
             "instead of replacing them",
+        )
+
+    joined = sorted(
+        who(b)
+        for identity, b in new_by_identity.items()
+        if identity not in old_by_identity
+    )
+    if joined:
+        report.note(
+            rel_path,
+            f"fittings added: {', '.join(joined)}",
+        )
+
+    # A re-attestation. Since HAIR 0.9.7 one install has one current
+    # word on one wig, so a person proving a wig they already proved
+    # REPLACES their earlier bundle. In a diff that reads as one bundle
+    # removed and one added carrying the same key, which is the
+    # legitimate additive shape and must never be read as a trimmed
+    # ledger.
+    refit = sorted(
+        who(new_by_identity[identity])
+        for identity in old_by_identity.keys() & new_by_identity.keys()
+        if wf.claims_bundle_out(old_by_identity[identity])
+        != wf.claims_bundle_out(new_by_identity[identity])
+    )
+    if refit:
+        report.note(
+            rel_path,
+            f"re-attestation by {', '.join(refit)}: same signing key, "
+            "earlier bundle replaced. This is the additive shape, not a "
+            "trimmed ledger",
         )
 
     if old.wig.climate is not None or new.wig.climate is not None:
@@ -756,110 +997,303 @@ def check_against_base(
             else None
         )
         if old_cells != new_cells:
-            report.warn(
+            report.fail(
                 rel_path,
-                "the climate lattice changed, so every checklist that "
-                f"pinned {old_cells} now vouches for a lattice this file "
-                "no longer carries",
+                "the climate lattice changed but the wig_id did not. A "
+                "changed description is a NEW wig: save it as new in "
+                "HAIR, which stamps supersedes with this wig's id, and "
+                "submit that over this file",
             )
         return
 
-    def recipe(sig) -> tuple[str, int, bool]:
-        """The three things a row digest binds, for naming what moved."""
-        return (
-            wf.normalized_pronto(sig.pronto),
-            int(sig.ditto_count),
-            bool(sig.bypass_protocol),
-        )
-
-    old_rows = {s.alias: wf.signal_row_digest(s) for s in old.wig.signals}
-    new_rows = {s.alias: wf.signal_row_digest(s) for s in new.wig.signals}
-    old_recipe = {s.alias: recipe(s) for s in old.wig.signals}
-    new_recipe = {s.alias: recipe(s) for s in new.wig.signals}
-
-    # Pair by alias for REPORTING only. Claims match rows by digest
-    # alone, so a rename with an unchanged digest costs nothing and a
-    # row whose digest moved orphans its claims wherever it is named.
-    moved = [
-        a for a in set(old_rows) & set(new_rows)
-        if old_rows[a] != new_rows[a]
-    ]
-    added = sorted(set(new_rows) - set(old_rows))
-    removed = sorted(set(old_rows) - set(new_rows))
-
-    if not (moved or added or removed):
+    ov = overlap(old.wig, new.wig, wf)
+    if not (ov["changed"] or ov["added"] or ov["removed"]):
+        if ov["renamed"]:
+            report.note(
+                rel_path,
+                "rows renamed, recipes unchanged: "
+                f"{', '.join(ov['renamed'])}. "
+                "No claim is affected; aliases were never in the digest",
+            )
         return
 
-    if moved:
-        cost: dict[str, set[str]] = defaultdict(set)
-        for bundle in old_bundles:
-            for row in bundle.rows:
-                if row.verdict != wf.VERDICT_WORKED:
-                    continue
-                for alias in moved:
-                    if row.digest == old_rows[alias]:
-                        cost[alias].add(bundle.handle or "(unnamed)")
+    cost = claims_cost(
+        old.wig, ov["changed_digests"] | ov["removed_digests"], wf
+    )
+    proven_away = sorted({n for names in cost.values() for n in names})
+    report.fail(
+        rel_path,
+        "the codes changed but the wig_id did not. " + overlap_line(ov)
+        + (
+            f". Claims by {', '.join(proven_away)} bind rows this file no "
+            "longer carries"
+            if proven_away
+            else ""
+        )
+        + ". The shelf holds current descriptions, wholly proven: when a "
+        "description changes it becomes a NEW wig. In HAIR, save your "
+        "device as a new wig -- it stamps supersedes with this wig's id "
+        "automatically -- and submit that file over this one",
+    )
 
-        def what_moved(alias: str) -> str:
-            """Which of the three recipe parts changed.
 
-            Worth naming rather than saying "the recipe changed": a row
-            whose Pronto is byte-identical and whose ditto count went
-            from 0 to 1 is a real change to what leaves the blaster, and
-            it is also completely invisible in a diff of the codes. A
-            reviewer told only that twelve rows moved will go looking
-            for twelve edited codes and find none.
-            """
-            was, now = old_recipe[alias], new_recipe[alias]
-            parts = []
-            if was[0] != now[0]:
-                parts.append("pronto")
-            if was[1] != now[1]:
-                parts.append(f"ditto_count {was[1]} to {now[1]}")
-            if was[2] != now[2]:
-                parts.append(f"bypass_protocol {was[2]} to {now[2]}")
-            return ", ".join(parts) or "unchanged"
+@dataclass
+class Shelved:
+    """One wig as it sits on a shelf, ready to be paired by id."""
 
-        detail = "; ".join(
-            f"{alias!r} ({what_moved(alias)}"
-            + (
-                f", was proven by {', '.join(sorted(cost[alias]))})"
-                if cost.get(alias)
-                else ", nobody had proven it)"
+    path: str
+    wig: object
+
+    @property
+    def wig_id(self) -> str:
+        return (getattr(self.wig, "wig_id", None) or "").strip()
+
+
+def read_shelf(paths, reader, wf) -> list[Shelved]:
+    """Parse a set of wig paths into Shelved entries, skipping junk."""
+    out = []
+    for path in paths:
+        text = reader(path)
+        if text is None:
+            continue
+        result = wf.parse_wig(text)
+        if result.ok and result.wig is not None and result.wig.wig_id:
+            out.append(Shelved(path, result.wig))
+    return out
+
+
+def check_shelf(
+    root: Path, base_ref: str | None, mods, report: Report
+) -> None:
+    """The ancestry walk: supersession, variants, and stale attestations.
+
+    KEYED ON ANCESTRY, NEVER ON FILE OPERATIONS. A same-device successor
+    composes the same brand-kind-model filename, so the common
+    supersession pull request is a MODIFY at one path, and a
+    remove-plus-add watcher sleeps straight through it. Pairing by
+    ``wig_id`` also covers the moved-filename case for free.
+
+    Five branches, from the supersession policy, with one refinement
+    that HAIR 0.9.7 forced. Since 0.9.7 every save route that mints from
+    a sourced device stamps ``supersedes`` automatically, including Save
+    as New, which keeps both files. So ancestry now arrives on
+    essentially every sourced submission, including deliberate revision
+    variants that replace nothing at all. Ancestry alone therefore
+    cannot flag anything: a new file that leaves its ancestor standing
+    is a variant carrying honest lineage, and only a pull request that
+    actually replaces something can name the wrong ancestor.
+    """
+    wf = mods["wig_format"]
+
+    head = read_shelf(
+        discover(root),
+        lambda p: (root / p).read_text(encoding="utf-8"),
+        wf,
+    )
+    head_by_path = {s.path: s for s in head}
+
+    # Id uniqueness across the shelf, always. Two files with one id are
+    # one wig in two places: claims bind to the id, so a fitting on
+    # either would read as proof of both. This is branch 5, and it is
+    # checked whether or not there is a base to compare against.
+    by_id: dict[str, list[Shelved]] = defaultdict(list)
+    for shelved in head:
+        by_id[shelved.wig_id].append(shelved)
+    for wig_id, entries in by_id.items():
+        if len(entries) > 1:
+            paths = ", ".join(e.path for e in entries)
+            for entry in entries:
+                report.fail(
+                    entry.path,
+                    f"wig_id {wig_id} is on {len(entries)} files ({paths}). "
+                    "An id is one wig: claims bind to it, so a fitting on "
+                    "either file would read as proof of both. A copy that "
+                    "is meant to be its own wig needs its own id -- save "
+                    "it as new in HAIR rather than duplicating the file",
+                )
+
+    if base_ref is None:
+        return
+
+    base = read_shelf(
+        git_list_wigs(base_ref), lambda p: git_show(base_ref, p), wf
+    )
+    base_by_path = {s.path: s for s in base}
+    base_by_id = {s.wig_id: s for s in base}
+    removed_paths = set(base_by_path) - set(head_by_path)
+
+    # A wig whose id is named in a SURVIVING wig's ancestry has already
+    # been replaced. Somebody fitted it before its successor landed.
+    # They lose minutes, not their contribution.
+    superseded_by: dict[str, Shelved] = {}
+    for shelved in head:
+        for ancestor in getattr(shelved.wig, "supersedes", []) or []:
+            superseded_by.setdefault(ancestor.strip(), shelved)
+
+    claimed_ancestors: set[str] = set()
+
+    for shelved in head:
+        path = shelved.path
+        ancestry = [
+            a.strip()
+            for a in (getattr(shelved.wig, "supersedes", []) or [])
+            if a.strip()
+        ]
+        base_here = base_by_path.get(path)
+        is_new_path = base_here is None
+        id_changed = (
+            base_here is not None and base_here.wig_id != shelved.wig_id
+        )
+
+        if not is_new_path and not id_changed:
+            continue  # same wig continuing; check_against_base owns it
+
+        # Shape 3: a stale attestation. The file being INTRODUCED is a
+        # wig that something else on the shelf has already replaced.
+        #
+        # "Introduced" is load-bearing, and getting it wrong is how the
+        # shop would bounce its own shelf. Since HAIR 0.9.7 a revision
+        # variant carries ancestry naming a wig that stays put, so the
+        # ancestry index alone marks perfectly current files as
+        # superseded. Only a wig arriving at a new path, or replacing
+        # what was at its own path, can be somebody re-adding a
+        # description the shelf has moved past.
+        stale = superseded_by.get(shelved.wig_id)
+        if stale is not None and stale.path != path:
+            report.fail(
+                path,
+                f"this wig was superseded by {stale.path}. You fitted a "
+                "wig that has since been replaced -- your proof is real, "
+                "it is just about a description the shelf no longer "
+                "carries. Download that file, import it, fit it, and "
+                "your name goes on the description people actually "
+                "download",
             )
-            for alias in sorted(moved)[:6]
-        )
-        more = f"; and {len(moved) - 6} more" if len(moved) > 6 else ""
-        report.warn(
-            rel_path,
-            f"{len(moved)} row(s) changed recipe: {detail}{more}. Those "
-            "claims are now orphaned. They stay in the file as signed "
-            "statements about bytes the wig no longer carries, and they "
-            "are worth weighing: a row somebody proved working is a "
-            "different thing to repair than a row nobody could",
-        )
+            continue
 
-    if added or removed:
-        report.warn(
-            rel_path,
-            f"rows added: {added or 'none'}; rows removed: "
-            f"{removed or 'none'}. Adding a button is ordinary; removing "
-            "one discards whatever anybody proved about it, so it is "
-            "worth confirming that is deliberate",
-        )
+        # What, if anything, does this pull request claim to replace?
+        replaced: Shelved | None = None
+        if id_changed:
+            replaced = base_here
+        else:
+            for ancestor in ancestry:
+                candidate = base_by_id.get(ancestor)
+                if candidate is not None and candidate.path in removed_paths:
+                    replaced = candidate
+                    break
 
-    old_perfect = sum(
-        1 for b in old_bundles if wfit.bundle_is_complete(b, old.wig)
-    )
-    new_perfect = sum(
-        1 for b in new_bundles if wfit.bundle_is_complete(b, new.wig)
-    )
-    if new_perfect < old_perfect:
+        if replaced is None:
+            # A pure addition. Ancestry here is lineage, not a claim to
+            # replace anything, and since 0.9.7 nearly every sourced
+            # submission carries some. Report it and move on.
+            standing = [
+                base_by_id[a].path
+                for a in ancestry
+                if a in base_by_id and base_by_id[a].path not in removed_paths
+            ]
+            if standing:
+                report.note(
+                    path,
+                    "new wig, ancestry names "
+                    f"{', '.join(standing)}, which this pull request "
+                    "leaves on the shelf. Read as a variant rather than a "
+                    "replacement",
+                )
+            continue
+
+        claimed_ancestors.add(replaced.path)
+
+        # A backwards supersession: the file being submitted is the
+        # ancestor of the file it would overwrite. Same mistake as the
+        # stale attestation above, arriving by the other door.
+        if shelved.wig_id in (
+            a.strip() for a in getattr(replaced.wig, "supersedes", []) or []
+        ):
+            report.fail(
+                path,
+                f"this would replace {replaced.path} with its own "
+                "ancestor. You fitted an older copy of this wig. Download "
+                "the current file, import it, fit it, and submit that",
+            )
+            continue
+
+        ov = overlap(replaced.wig, shelved.wig, wf)
+        line = overlap_line(ov)
+
+        if ancestry[:1] == [replaced.wig_id]:
+            report.note(path, f"supersedes {replaced.path}. {line}")
+        elif replaced.wig_id in ancestry:
+            generations = ancestry.index(replaced.wig_id) + 1
+            report.note(
+                path,
+                f"supersedes {replaced.path}, {generations} generations "
+                f"in one pull request. {line}",
+            )
+        else:
+            standing = [
+                base_by_id[a].path
+                for a in ancestry
+                if a in base_by_id and base_by_id[a].path not in removed_paths
+            ]
+            if standing:
+                # Branch 4: the ancestry names a wig that is still on the
+                # shelf, and it is not the one being replaced.
+                report.warn(
+                    path,
+                    f"wrong ancestor: this replaces {replaced.path} "
+                    f"({replaced.wig_id}), but its ancestry names "
+                    f"{', '.join(standing)}, which stays on the shelf. "
+                    "Either it grew out of a different wig, or this pull "
+                    f"request is replacing the wrong file. {line}",
+                )
+            else:
+                # Branch 3: not a supersession the repo can trace.
+                report.warn(
+                    path,
+                    f"this replaces {replaced.path} ({replaced.wig_id}), "
+                    "but nothing in its ancestry names that wig"
+                    + (
+                        f" (ancestry: {', '.join(ancestry)})"
+                        if ancestry
+                        else " (it carries no ancestry at all)"
+                    )
+                    + f". The shop cannot trace the lineage. {line}. Worth "
+                    "asking the contributor for the story",
+                )
+
+        repaired = claims_cost(replaced.wig, ov["changed_digests"], wf)
+        if repaired:
+            names = sorted({n for group in repaired.values() for n in group})
+            report.warn(
+                path,
+                f"{len(repaired)} repaired row(s) carried claims by "
+                f"{', '.join(names)}, which this change orphans. Repair "
+                "flowing back to the shelf is the designed path, and a "
+                "row somebody proved working is still a different thing "
+                "to repair than a row nobody could. Worth reading the "
+                "contributor's account of what was wrong with it",
+            )
+
+        dropped = claims_cost(replaced.wig, ov["removed_digests"], wf)
+        if dropped:
+            names = sorted({n for group in dropped.values() for n in group})
+            report.warn(
+                path,
+                f"{len(dropped)} row(s) removed here carried claims by "
+                f"{', '.join(names)}. Trimming rows to reach a perfect "
+                "fit is the move the gate tempts, and it discards "
+                "somebody else's proof to do it. If your hardware "
+                "revision lacks these buttons, the answer is a revision "
+                "wig of your own, not a haircut on the shared file",
+            )
+
+    for path in sorted(removed_paths - claimed_ancestors):
         report.warn(
-            rel_path,
-            f"perfect fits drop from {old_perfect} to {new_perfect}. The "
-            "wig is less proven after this change than before it, which "
-            "is expected for a repair and worth seeing plainly",
+            path,
+            "this wig leaves the shelf and nothing in the pull request "
+            "supersedes it. The shelf holds current descriptions, so a "
+            "wig only retires when something replaces it. Worth "
+            "confirming the removal is deliberate",
         )
 
 
@@ -874,7 +1308,7 @@ def discover(root: Path) -> list[str]:
     )
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Validate wigs against HAIR's format rules."
     )
@@ -892,22 +1326,22 @@ def main() -> int:
     parser.add_argument(
         "--base-ref",
         default=None,
-        help="git ref to compare against for the signals-unchanged and "
-        "fittings-superset checks",
+        help="git ref to compare against for the fittings-superset and "
+        "ancestry checks",
     )
     parser.add_argument(
         "--root",
         default=".",
         help="repository root (default: current directory)",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     root = Path(args.root).resolve()
     mods = load_hair(args.hair_src)
     report = Report()
 
     targets = args.files or discover(root)
-    if not targets:
+    if not targets and not args.base_ref:
         print("No wigs to check yet.")
         return 0
 
@@ -917,7 +1351,7 @@ def main() -> int:
         rel_path = Path(rel_path).as_posix()
         full = root / rel_path
         if not full.exists():
-            # A deletion in the diff. Nothing to validate.
+            # A deletion in the diff. The ancestry walk accounts for it.
             continue
         if not rel_path.endswith(WIG_SUFFIX):
             continue
@@ -934,11 +1368,35 @@ def main() -> int:
         if args.base_ref:
             check_against_base(rel_path, text, args.base_ref, mods, report)
 
-    # A duplicate is only ever the incoming file's problem. On a diff
-    # run the failure is reported against the wig being added, never
-    # against the one already merged, so a contributor is not shown an
-    # error on a file they did not touch.
-    submitted = {Path(f).as_posix() for f in args.files} if args.files else None
+    check_shelf(root, args.base_ref, mods, report)
+
+    submitted = (
+        {Path(f).as_posix() for f in args.files} if args.files else None
+    )
+    check_duplicates(root, hashes, submitted, mods, report)
+
+    return emit(report)
+
+
+def check_duplicates(
+    root: Path,
+    hashes: dict[str, list[str]],
+    submitted: set[str] | None,
+    mods,
+    report: Report,
+) -> None:
+    """Two files, one code set. The same remote is already here.
+
+    ``wig_content_hash`` is no longer an attestation binding anywhere,
+    despite the name -- claims bind per-row digests. It survives for
+    exactly this: spotting the same remote arriving under a second name.
+
+    A duplicate is only ever the incoming file's problem. On a diff run
+    the failure is reported against the wig being added, never against
+    the one already merged, so a contributor is not shown an error on a
+    file they did not touch.
+    """
+    wf = mods["wig_format"]
 
     if submitted is not None:
         for rel_path in discover(root):
@@ -947,11 +1405,9 @@ def main() -> int:
             full = root / rel_path
             if not full.exists():
                 continue
-            result = mods["wig_format"].parse_wig(
-                full.read_text(encoding="utf-8")
-            )
+            result = wf.parse_wig(full.read_text(encoding="utf-8"))
             if result.ok and result.wig is not None:
-                digest = mods["wig_format"].wig_content_hash(result.wig)
+                digest = wf.wig_content_hash(result.wig)
                 if digest in hashes:
                     hashes[digest].append(rel_path)
 
@@ -972,26 +1428,22 @@ def main() -> int:
                 "replacing that file",
             )
 
-    return emit(report)
-
 
 def emit(report: Report) -> int:
     """Print the outcome, and annotate the PR when running in Actions."""
     in_actions = os.environ.get("GITHUB_ACTIONS") == "true"
 
-    for path in sorted(report.warnings):
-        for message in report.warnings[path]:
-            if in_actions:
-                print(f"::warning file={path}::{message}")
-            else:
-                print(f"WARN  {path}: {message}")
-
-    for path in sorted(report.failures):
-        for message in report.failures[path]:
-            if in_actions:
-                print(f"::error file={path}::{message}")
-            else:
-                print(f"FAIL  {path}: {message}")
+    for level, prefix, bucket in (
+        ("notice", "NOTE ", report.notes),
+        ("warning", "WARN ", report.warnings),
+        ("error", "FAIL ", report.failures),
+    ):
+        for path in sorted(bucket):
+            for message in bucket[path]:
+                if in_actions:
+                    print(f"::{level} file={path}::{message}")
+                else:
+                    print(f"{prefix} {path}: {message}")
 
     total_failures = sum(len(v) for v in report.failures.values())
     total_warnings = sum(len(v) for v in report.warnings.values())
