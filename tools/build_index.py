@@ -22,7 +22,11 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from validate_wigs import WIG_SUFFIX, WIGS_DIR, discover, load_hair  # noqa: E402
+from validate_wigs import (
+    bundle_identity,
+    discover,
+    load_hair,
+)
 
 HEADER = """# Index
 
@@ -30,17 +34,22 @@ Every wig in the shop. Generated from the files by
 [`tools/build_index.py`](tools/build_index.py) and rewritten on merge,
 so edits here are overwritten. Change a wig, not this page.
 
-**Fittings** is how many people proved every row of this wig on their
-own hardware. It is the closest thing to a rating this repo has, and
-unlike a star it costs somebody real time at real hardware. Three
-fittings from three different people makes a wig eligible for
+**Fittings** is how many people have proven every row of this wig on
+their own hardware. It is the closest thing to a rating this repo has,
+and unlike a star it costs somebody real time at real hardware. Every
+wig here has at least one, because that is the door: a wig lands when
+one person has watched the whole thing work. Three fittings from three
+different people makes a wig eligible for
 [WigFactory](https://github.com/DAB-LABS/WigFactory).
 
-**Covered** is how many rows anybody has proven, pooled across
-everyone. It can reach the full count while Fittings is still zero:
-three people who each proved a different third have not, between them,
-produced anybody who can say the whole wig works. Both numbers are
-true, and they answer different questions.
+**Fitters** is how many people have attested at all. It is never
+smaller than Fittings, and the gap is honest partial attestations:
+somebody whose hardware revision lacks a button can still vouch for the
+rows they have, and their signature is worth having even though it
+could not have opened the door on its own.
+
+Both numbers count signing keys rather than names, because a name is
+what somebody typed and a key is which install they typed it on.
 
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
@@ -64,8 +73,9 @@ FOOTER = """
 **Identifiers** are FCC IDs, UPCs and ASINs, which are how hardware with
 no meaningful brand stays findable.
 
-Nothing here was accepted on somebody's word. Every row was proven on
-real hardware by the people named in its fittings.
+Nothing here was accepted on somebody's word. Every wig on this page has
+been watched working end to end, on real hardware, by at least one of
+the people named beside it.
 """
 
 
@@ -77,28 +87,38 @@ def escape(value: str) -> str:
 def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     """One table row, plus the sort keys behind it.
 
-    Fittings counts PERFECT fits, using HAIR's ``bundle_is_complete``,
-    so the number means exactly what a green check means in the Closet.
-    Covered is the union across everybody, which HAIR hands to the shop
-    as judgement rather than a check. Keeping them in separate columns
-    is deliberate: coverage must never be able to read as proof.
+    Fittings counts PERFECT fits using HAIR's ``bundle_is_complete``, so
+    the number means exactly what a green check means in the Closet.
+    Fitters counts everybody who attested, whole or partial.
+
+    Both are counted by signing key rather than by handle. Handles carry
+    no uniqueness -- two people called David are two people when their
+    keys differ, and one person is never two -- and since HAIR 0.9.7 the
+    key is what decides whether a re-fit replaces or appends.
     """
     wf = mods["wig_format"]
     wfit = mods["wig_fitting"]
 
     bundles = wf.claims_of(wig)
     digests = wf.wig_row_digests(wig)
-    perfect = [b for b in bundles if wfit.bundle_is_complete(b, wig, digests)]
-    handles = sorted({b.handle for b in perfect if b.handle})
 
-    if wig.climate is not None:
-        # A matrix wig's claims bind the lattice as a set, so there is no
-        # per-row union to report. Saying "0/0" would read as nothing
-        # proven, which is the opposite of the truth for a signed
-        # checklist.
-        covered = "matrix"
-    else:
-        covered = f"{len(wf.coverage(bundles, digests))}/{len(digests)}"
+    def complete(bundle) -> bool:
+        if not wfit.bundle_is_complete(bundle, wig, digests):
+            return False
+        if wig.climate is None:
+            return True
+        # A matrix checklist vouches for the lattice it sampled. If the
+        # lattice moved, the sample no longer describes this file, and
+        # counting it would put a number on the front page that the
+        # closet would not agree with.
+        return bool(bundle.cells_hash) and bundle.cells_hash == (
+            wf.cells_content_hash(wig.climate)
+        )
+
+    perfect = [b for b in bundles if complete(b)]
+    fitters = {bundle_identity(b) for b in bundles}
+    fittings = {bundle_identity(b) for b in perfect}
+    handles = sorted({b.handle for b in perfect if b.handle})
 
     ids = []
     for key in sorted(wig.identifiers or {}):
@@ -110,19 +130,19 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     link = f"[{name}]({rel_path})"
 
     row = (
-        "| {brand} | {kind} | {model} | {link} | {count} | {covered} "
+        "| {brand} | {kind} | {model} | {link} | {count} | {fitters} "
         "| {who} | {ids} |"
     ).format(
         brand=escape(brand),
         kind=escape(wig.kind or ""),
         model=escape(wig.model or ""),
         link=link,
-        count=len(perfect),
-        covered=covered,
+        count=len(fittings),
+        fitters=len(fitters),
         who=escape(", ".join(handles)),
         ids=escape("; ".join(ids)),
     )
-    return row, len(perfect), brand.lower()
+    return row, len(fittings), brand.lower()
 
 
 def unreadable_section(unreadable: list[str]) -> str:
@@ -168,7 +188,8 @@ def build(root: Path, mods) -> str:
 
     parts.append(
         f"\n{len(rows)} wig(s).\n\n"
-        "| Brand | Kind | Model | Wig | Fittings | Covered | Fitted by | Identifiers |\n"
+        "| Brand | Kind | Model | Wig | Fittings | Fitters | Fitted by "
+        "| Identifiers |\n"
         "|---|---|---|---|---:|---:|---|---|\n"
     )
     parts.append("\n".join(row for row, _, _ in rows))
@@ -180,7 +201,7 @@ def build(root: Path, mods) -> str:
     return "".join(parts).rstrip() + "\n"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate INDEX.md.")
     parser.add_argument("--hair-src", required=True)
     parser.add_argument("--root", default=".")
@@ -189,7 +210,7 @@ def main() -> int:
         action="store_true",
         help="write nothing; exit 1 if INDEX.md is out of date",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     root = Path(args.root).resolve()
     mods = load_hair(args.hair_src)

@@ -1,0 +1,71 @@
+{
+    "format": "hair-wig/3",
+    "name": "Test wig",
+    "wig_id": "46254b68-a3b9-4b39-9a86-9124c5a02984",
+    "brand": "Test",
+    "model": "Test Model",
+    "notes": "This is a test of a replace",
+    "origin": "device",
+    "supersedes": [
+        "fa7a0e14-381c-426a-9560-2ce6ef25b646"
+    ],
+    "identifiers": {
+        "fcc_id": "Test FCC ID.",
+        "upc": "Test UPC",
+        "asin": "Test ASIN."
+    },
+    "signals": [
+        {
+            "alias": "Rewind",
+            "pronto": "0000 006D 0022 0000 015E 00AB 0018 0014 0017 0014 0018 0014 0017 0014 0019 0013 0017 0014 0018 0014 0018 0014 0019 003D 0019 003D 0019 003D 0018 003D 0019 003D 0018 003D 0019 003D 0019 003D 0019 0013 0016 0015 0016 0015 0019 003D 0018 003E 0017 0015 0018 0013 0019 0013 0016 0040 0016 0040 0018 003D 0018 0013 0018 0014 0018 003D 0017 003F 0018 003D 0019 017C",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Power Off",
+            "pronto": "0000 006D 0022 0000 015B 00A3 001B 000F 001B 000F 001B 000F 001B 000E 001B 000F 001B 0010 001A 0010 001A 0010 001A 0010 001A 0010 001A 0010 001A 0010 001A 003A 0019 0011 001A 0011 0019 0011 001A 0010 0019 0011 0019 0011 0019 003B 001A 003A 001A 0011 001A 0010 0019 0011 0019 003B 0019 003B 0019 003B 0019 0011 001A 0010 0019 003B 001A 003A 001A 003A 001A 017C",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Channel Down",
+            "pronto": "0000 006D 0022 0000 0159 00AB 0015 0040 0015 0014 0016 0040 0015 0014 0016 0014 0016 0040 0015 0014 0016 0040 0015 0014 0016 0040 0015 0014 0016 0040 0015 003F 0016 0014 0016 003F 0015 0014 0016 003F 0015 0040 0015 0014 0016 0014 0016 0014 0016 0014 0016 0014 0016 0014 0016 0014 0016 0014 0015 0040 0015 003F 0016 003F 0015 0040 0015 003F 0016 003F 0019 017C",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        }
+    ],
+    "comb": {
+        "version": 1,
+        "date": "2026-08-07",
+        "suspects": 0,
+        "counts": {},
+        "findings": []
+    },
+    "fittings": [
+        {
+            "wig_id": "46254b68-a3b9-4b39-9a86-9124c5a02984",
+            "handle": "David",
+            "github": "dab-labs",
+            "date": "2026-08-07",
+            "rows": [
+                {
+                    "alias_at_claim": "Rewind",
+                    "digest": "78de50148b18e529",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Power Off",
+                    "digest": "d22a828c6b02677b",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Channel Down",
+                    "digest": "f001aba5cc92b06a",
+                    "verdict": "worked"
+                }
+            ],
+            "key": "l9LgWpW2WV/dDPxiku+6qj6UBdIdz8q9jjptDJhK9R0=",
+            "sig": "N7PN2UgM3WnS6tJIWxAqiLpoILG3Nm72JDh30UCAd+EiGGonq+3XUubR1HslNzBLKq/l9hsSHGnumjU90bp6CQ=="
+        }
+    ]
+}

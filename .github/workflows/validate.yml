@@ -11,13 +11,15 @@ on:
     paths:
       - "wigs/**"
       - "tools/**"
+      - "tests/**"
+      - "ruff.toml"
       - ".github/workflows/validate.yml"
   push:
     branches: [main]
   workflow_dispatch:
 
 env:
-  HAIR_REF: v0.9.5
+  HAIR_REF: v0.9.7
 
 jobs:
   validate:
@@ -63,6 +65,12 @@ jobs:
             echo "No changed wigs; checking everything in wigs/"
           fi
 
+      # Deleted wigs are excluded from the file list on purpose. The
+      # ancestry walk reads the whole shelf at the base ref and compares
+      # it to the working tree, so a removal is accounted for whether or
+      # not anything names it -- and a supersession that renames a file
+      # is paired by wig_id rather than by path, which no diff of names
+      # could do.
       - name: Validate
         run: |
           args=""
@@ -73,3 +81,35 @@ jobs:
             --hair-src .hair \
             $args \
             ${{ steps.changed.outputs.files }}
+
+  tools:
+    # The validator decides whether a stranger's signed work survives a
+    # pull request. Its own tests run on every change to it.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the shop
+        uses: actions/checkout@v7
+
+      - name: Check out HAIR at ${{ env.HAIR_REF }}
+        uses: actions/checkout@v7
+        with:
+          repository: DAB-LABS/HAIR
+          ref: ${{ env.HAIR_REF }}
+          path: .hair
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.13"
+
+      - name: Install
+        run: pip install --quiet cryptography pytest ruff
+
+      - name: Lint
+        run: ruff check tools/ tests/
+
+      - name: Test
+        env:
+          HAIR_SRC: .hair
+        run: pytest tests/ -q
