@@ -108,6 +108,8 @@ So: do not edit a shop wig's codes and submit that. Fix the device, not the file
 
 Usually that is a change to the file already here, because a successor for the same device composes the same filename. It becomes a rename only when the kind or model changed, and the checks follow it either way, because they pair wigs by identity rather than by path.
 
+**Air conditioners are the exception.** A matrix wig repairs in place: HAIR edits the lattice under the same wig rather than minting a successor, and the shop accepts that. Every matrix attestation pins the exact lattice it vouched for, so the moment a cell moves, every earlier checklist is marked orphaned and counts toward nothing. The wig still needs a fresh perfect fit against the lattice it now carries; it just does not need a new identity to get one.
+
 The old wig retires with its fittings. That is not the shop throwing away somebody's work: their proof was about a description that no longer exists, and git history keeps every word of it. The checks will report exactly which rows changed and whose claims each change retires, so a maintainer can read what your repair cost before merging it.
 
 **If a wig you fitted was replaced before your pull request landed**, the check will tell you so and point at the file that replaced it. Download that one, fit it, and your name goes on the description people actually download. You lose minutes, not your contribution.
@@ -171,7 +173,7 @@ Two things, and it takes about two minutes:
 
 **Edited codes submitted over a shop wig.** Not because repair is unwelcome; it is a designed path. But a changed description is a new wig, so it arrives as a replacement with its lineage, not as an edit in place. See [above](#when-the-wig-is-wrong-or-your-device-outgrew-it).
 
-**Rows trimmed out of a shared wig to reach a perfect fit.** If your unit does not have those buttons, submit your revision as its own wig. Deleting rows other people proved, to get your own file green, is the one move this gate could tempt somebody into, and the checks make it visible.
+**Rows trimmed out of a shared wig to reach a perfect fit.** If your unit does not have those buttons, submit your revision as its own wig. Deleting rows other people proved, to get your own file green, is the one move this gate could tempt somebody into, and the checks refuse it by name. Withdrawing a row you proved yourself is different and passes with a note, because that is your own word to change. If a code really is dead and everyone agrees, say so in the pull request and a maintainer can merge past the refusal.
 
 **A pre-0.9.5 fitting.** The old whole-file model recorded that some bytes were proved, not which rows, so there is no honest way to turn one into per-row claims. Import the wig into current HAIR and fit it again. It takes a few minutes; a fabricated claim lasts forever.
 
