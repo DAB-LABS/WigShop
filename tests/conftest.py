@@ -273,6 +273,11 @@ class Shop:
     def remove(self, rel_path: str) -> None:
         (self.root / rel_path).unlink()
 
+    def read(self, rel_path: str) -> dict:
+        return json.loads(
+            (self.root / rel_path).read_text(encoding="utf-8")
+        )
+
     def merge(self, message: str = "shelf") -> str:
         """Commit everything as the merged state, and return the ref."""
         self._git("add", "-A")
@@ -336,3 +341,148 @@ def messages(bucket: dict, path: str | None = None) -> list[str]:
 
 def has(bucket: dict, needle: str, path: str | None = None) -> bool:
     return any(needle in m for m in messages(bucket, path))
+
+
+# ---------------------------------------------------------------------------
+# Matrix wigs
+# ---------------------------------------------------------------------------
+
+
+def lattice_prontos(count: int) -> list[str]:
+    """``count`` distinct Pronto codes, minted from a real one.
+
+    A lattice needs more distinct codes than a real download carries, and
+    two cells sharing a code would give two checklist rows one digest --
+    which collapses them and quietly weakens every completeness test
+    here. Flipping burst pairs inside a genuine code keeps the header and
+    the pair-count maths valid while changing what the digest sees.
+    """
+    words = PRONTOS[0].split()
+    body = [i for i, w in enumerate(words) if i >= 4 and w in ("0015", "0040")]
+    out: list[str] = []
+    n = 1
+    while len(out) < count:
+        candidate = list(words)
+        for bit, idx in enumerate(body):
+            if (n >> (bit % 16)) & 1:
+                candidate[idx] = "0040" if candidate[idx] == "0015" else "0015"
+        text = " ".join(candidate)
+        if text not in out:
+            out.append(text)
+        n += 1
+    return out
+
+
+def make_matrix_wig(
+    wig_id: str,
+    *,
+    name: str = "Bench AC",
+    brand: str | None = "Bench",
+    model: str | None = "A-1",
+    modes: tuple[str, ...] = ("cool", "heat"),
+    fans: tuple[str, ...] = ("auto", "high"),
+    temps: tuple[int, ...] = (16, 20, 24, 30),
+    shift: int = 0,
+    repair: int = 0,
+    comb: bool = True,
+) -> dict:
+    """A hair-wig/2-shaped lattice, stamped /3. Cells get distinct codes.
+
+    ``shift`` rotates which Pronto lands on which cell, which is how a
+    test repairs a lattice without inventing a code.
+    """
+    coords = [
+        (mode, fan, temp)
+        for mode in modes
+        for fan in fans
+        for temp in temps
+    ]
+    pool = lattice_prontos(len(coords) + 8 + shift)
+    cells = [
+        {"mode": mode, "fan": fan, "temp": temp, "pronto": pool[i + shift]}
+        for i, (mode, fan, temp) in enumerate(coords)
+    ]
+    # ``repair`` swaps the codes on the first N cells for spare ones, so
+    # a test can move part of a lattice the way a real repair does
+    # rather than rotating every cell at once.
+    for n in range(repair):
+        cells[n]["pronto"] = pool[len(coords) + shift + n]
+    i = len(coords) + shift + max(repair, 0)
+    wig: dict = {
+        "format": "hair-wig/3",
+        "name": name,
+        "wig_id": wig_id,
+        "kind": "ac",
+        "signals": [],
+        "climate": {
+            "min_temp": min(temps),
+            "max_temp": max(temps),
+            "modes": list(modes),
+            "fan_modes": list(fans),
+            "off": pool[i],
+            "cells": cells,
+        },
+        "fittings": [],
+    }
+    for key, value in (("brand", brand), ("model", model)):
+        if value:
+            wig[key] = value
+    if comb:
+        wig["comb"] = {
+            "version": 1, "date": "2026-08-08",
+            "suspects": 0, "counts": {}, "findings": [],
+        }
+    return wig
+
+
+def checklist_of(mods, wig: dict):
+    """HAIR's own dimension checklist for a matrix wig dict."""
+    parsed = mods["wig_format"].parse_wig(json.dumps(wig)).wig
+    return mods["wig_climate"].dimension_checklist(parsed.climate)
+
+
+def attest_matrix(
+    mods,
+    wig: dict,
+    person: Person,
+    *,
+    rows: int | None = None,
+    verdicts: dict[str, str] | None = None,
+    sign: bool = True,
+    date: str = "2026-08-08",
+) -> dict:
+    """Attest a matrix wig's dimension checklist.
+
+    ``rows=1`` builds the one-row bundle that HAIR 0.9.7's
+    ``bundle_is_complete`` reads as a perfect fit over a whole lattice.
+    """
+    wf = mods["wig_format"]
+    parsed = wf.parse_wig(json.dumps(wig)).wig
+    items = checklist_of(mods, wig)
+    if rows is not None:
+        items = items[:rows]
+    verdicts = verdicts or {}
+    entry: dict = {
+        "wig_id": wig["wig_id"],
+        "handle": person.handle,
+        "date": date,
+        "cells_hash": wf.cells_content_hash(parsed.climate),
+        "rows": [
+            {
+                "alias_at_claim": item.key,
+                "digest": wf.row_digest(item.pronto, 0, False),
+                "verdict": verdicts.get(item.key, "worked"),
+            }
+            for item in items
+        ],
+    }
+    if person.github:
+        entry["github"] = person.github
+    if sign:
+        mods["fitting_signing"].sign_fitting(entry, person.private_b64)
+    wig["fittings"] = [
+        e for e in wig["fittings"]
+        if e.get("key") != entry.get("key") or entry.get("key") is None
+    ]
+    wig["fittings"].append(entry)
+    return wig

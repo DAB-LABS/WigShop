@@ -266,6 +266,72 @@ def who(bundle) -> str:
     return bundle.handle or bundle.github or "(unnamed)"
 
 
+def matrix_checklist_digests(wig, mods) -> set[str] | None:
+    """The dimension checklist a lattice implies, as row digests.
+
+    A matrix has thousands of cells and nobody presses thousands of
+    buttons, so a checklist SAMPLES it: every mode, every fan speed,
+    every swing, the ends of the temperature range, the power codes.
+    HAIR derives that sample deterministically from the lattice, and
+    this imports the same function rather than guessing at the shape.
+
+    The shop has to derive it because ``bundle_is_complete`` cannot.
+    As shipped in 0.9.7 it asks only "non-empty, and every row worked",
+    which never re-derives what the lattice implies -- so a bundle that
+    simply omits a dimension row reads complete, and a ONE-ROW bundle
+    over a sixteen-cell lattice reads complete. Silence is not a claim.
+    Verified against the shipped code on 2026-08-08; HAIR's own fix
+    lands in the perfect-or-nothing round, but files minted by 0.9.7
+    installs are already in the wild, so the shop applies the check
+    itself rather than trusting the answer it is given.
+
+    Returns None when the checklist cannot be derived, which is a
+    different thing from an empty one and is never treated as passing.
+    """
+    if wig.climate is None:
+        return None
+    wf = mods["wig_format"]
+    wc = mods["wig_climate"]
+    try:
+        items = wc.dimension_checklist(wig.climate)
+    except Exception:  # a lattice shape HAIR's derivation cannot walk
+        return None
+    return {wf.row_digest(item.pronto, 0, False) for item in items}
+
+
+def bundle_is_perfect(
+    bundle, wig, mods, digests=None, expected=None
+) -> bool:
+    """Did this one bundle prove the whole wig? THE gate, in one place.
+
+    Flat wigs delegate to HAIR's ``bundle_is_complete``, so the shop and
+    the Closet cannot disagree. Matrix wigs add two conditions HAIR does
+    not check: the bundle must pin the lattice this file carries, and
+    its worked claims must cover the checklist that lattice implies.
+
+    One function because two callers used to answer this separately and
+    the index quietly disagreed with the validator about matrix wigs.
+    """
+    wf = mods["wig_format"]
+    wfit = mods["wig_fitting"]
+
+    if wig.climate is None:
+        return wfit.bundle_is_complete(bundle, wig, digests)
+
+    if not bundle.cells_hash:
+        return False
+    if bundle.cells_hash != wf.cells_content_hash(wig.climate):
+        return False
+    if expected is None:
+        expected = matrix_checklist_digests(wig, mods)
+    if not expected:
+        return False
+    worked = {
+        row.digest for row in bundle.rows if row.verdict == wf.VERDICT_WORKED
+    }
+    return expected <= worked
+
+
 def check_path_shape(rel_path: str, report: Report) -> str | None:
     """Folder and filename rules. Returns the brand folder, or None."""
     parts = Path(rel_path).parts
@@ -397,10 +463,13 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
     digests = wf.wig_row_digests(wig)
     live = set(digests)
     lattice = wf.cells_content_hash(wig.climate) if matrix else None
+    expected = matrix_checklist_digests(wig, mods) if matrix else None
+    best_covered = 0
 
     by_identity: dict[str, list[str]] = defaultdict(list)
     seen_accounts: dict[str, set[str]] = defaultdict(set)
     wont_work: dict[str, set[str]] = defaultdict(set)
+    not_on_device: dict[str, set[tuple[str, str]]] = defaultdict(set)
     perfect: list[object] = []
 
     for entry, bundle in pairs:
@@ -445,14 +514,15 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
         for row in bundle.rows:
             if row.verdict == wf.VERDICT_WONT_WORK:
                 wont_work[row.digest].add(identity)
-
-        complete = wfit.bundle_is_complete(bundle, wig, digests)
+            elif row.verdict == wf.VERDICT_NOT_ON_DEVICE:
+                not_on_device[row.digest].add((identity, row.alias_at_claim))
 
         if matrix:
             # A checklist samples a lattice rather than walking it, so
-            # the bundle pins the lattice it sampled. Per-row presence is
-            # not a question that can be asked here: a matrix wig has no
-            # flat row digests by design.
+            # the bundle pins the lattice it sampled AND has to cover the
+            # sample. Per-row presence is not a question that can be
+            # asked here: a matrix wig has no flat row digests by design.
+            complete = False
             if not bundle.cells_hash:
                 report.warn(
                     rel_path,
@@ -460,17 +530,41 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                     "no way to tell which lattice its checklist vouched "
                     "for",
                 )
-                complete = False
             elif bundle.cells_hash != lattice:
-                report.fail(
+                # The matrix equivalent of an orphaned flat claim, and
+                # treated the same way: kept, reported, never counted.
+                # It cannot be a refusal, because a lattice repairs IN
+                # PLACE (owner ruling 2026-08-08) and HAIR's own update
+                # keeps the existing fittings when it writes the new
+                # one -- so failing here would reject the repair path
+                # for carrying exactly what HAIR put in the file.
+                report.warn(
                     rel_path,
                     f"fitting {name!r} vouched for a different lattice "
-                    f"(cells_hash {bundle.cells_hash}). The matrix "
-                    "changed after it was attested, and a checklist that "
-                    "sampled the old one says nothing about this one",
+                    f"(cells_hash {bundle.cells_hash}). The matrix has "
+                    "changed since it was attested, so this checklist is "
+                    "orphaned: it stays as somebody's signed statement "
+                    "about a lattice this file no longer carries, and it "
+                    "counts toward nothing",
                 )
-                complete = False
+            elif not expected:
+                report.warn(
+                    rel_path,
+                    f"the dimension checklist for this lattice could not "
+                    f"be derived, so fitting {name!r} cannot be checked "
+                    "for completeness and does not count toward the gate",
+                )
+            else:
+                worked = {
+                    row.digest
+                    for row in bundle.rows
+                    if row.verdict == wf.VERDICT_WORKED
+                }
+                covered = len(expected & worked)
+                best_covered = max(best_covered, covered)
+                complete = expected <= worked
         else:
+            complete = wfit.bundle_is_complete(bundle, wig, digests)
             orphans = [r for r in bundle.rows if r.digest not in live]
             if orphans:
                 shown = ", ".join(repr(r.alias_at_claim) for r in orphans[:5])
@@ -519,13 +613,22 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
     # every row of this wig worked on their own hardware.
     if not perfect:
         if matrix:
+            shortfall = (
+                f" The dimension checklist this lattice implies has "
+                f"{len(expected)} rows; the best bundle here vouched for "
+                f"{best_covered}."
+                if expected
+                else ""
+            )
             report.fail(
                 rel_path,
                 "no perfect fit. The shop takes a wig when one person has "
                 "vouched for its whole checklist against the lattice this "
-                "file carries. Import it into HAIR, live with the device, "
-                "and save it to the closet with every checklist row "
-                "marked worked",
+                f"file carries.{shortfall} A bundle that simply omits a "
+                "checklist row reads complete to HAIR 0.9.7, so the shop "
+                "re-derives the checklist from the lattice itself: "
+                "silence is not a claim. Import it into HAIR, live with "
+                "the device, and save it with every checklist row marked",
             )
         else:
             proven = wf.coverage(
@@ -600,6 +703,47 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                 "work on their hardware. One person is a hardware "
                 "revision; several is a sign the code itself is wrong",
             )
+
+    # The other half of the diagnostic feed, and it argues the opposite
+    # way. Several fitters saying a row is NOT ON their device is not a
+    # bad code -- it is a fingerprint of a hardware revision that lacks
+    # that button, and the answer is a revision-variant wig rather than
+    # a repair. Only matrix wigs can still produce these from current
+    # HAIR, whose flat checklists went green-only, but flat files minted
+    # by 0.9.5 and 0.9.6 carry them and stay valid.
+    for digest, seen in not_on_device.items():
+        identities = {identity for identity, _ in seen}
+        if len(identities) > 1:
+            label = next(
+                (alias for _, alias in seen if alias),
+                digest,
+            )
+            report.warn(
+                rel_path,
+                f"{len(identities)} fitters say {label!r} is not on their "
+                "device at all. That is the fingerprint of a hardware "
+                "revision rather than a bad code, so the answer is a "
+                "revision wig of its own, not a repair to this one",
+            )
+
+    # An attestation does not launder an anomalous code. A green,
+    # complete bundle over a code that does not resemble the file's
+    # other rows is possible and sometimes honest -- a fitter who tests
+    # a comb-flagged code and finds it working signs for it, and the
+    # signature is the better evidence. But claims are the EVIDENCE and
+    # the comb is the reviewer's INSTRUMENT, and "it looked attested" is
+    # not a reason to skip looking at the bytes.
+    comb = wig.extra.get("comb")
+    suspects = comb.get("suspects") if isinstance(comb, dict) else None
+    if perfect and isinstance(suspects, int) and suspects > 0:
+        report.warn(
+            rel_path,
+            f"this wig is perfectly fitted AND its comb receipt lists "
+            f"{suspects} suspect(s). Both can be true: somebody may have "
+            "tested a flagged code and found it working. Read the receipt "
+            "before merging anyway -- an attestation does not launder a "
+            "code that does not resemble its neighbours",
+        )
 
 
 def check_comb(rel_path: str, wig, report: Report) -> None:
@@ -866,14 +1010,58 @@ def overlap_line(ov: dict) -> str:
     )
 
 
-def claims_cost(old_wig, gone: set[str], wf) -> dict[str, set[str]]:
-    """Whose proof each departing digest carries away."""
-    cost: dict[str, set[str]] = defaultdict(set)
+def claims_cost(old_wig, gone: set[str], wf) -> dict[str, dict[str, str]]:
+    """Whose proof each departing digest carries away.
+
+    Keyed by identity rather than by display name, because the trim rule
+    turns on WHOSE proof is being discarded: your own earlier word is
+    yours to withdraw, somebody else's is not.
+    """
+    cost: dict[str, dict[str, str]] = defaultdict(dict)
     for bundle in wf.claims_of(old_wig):
         for row in bundle.rows:
             if row.verdict == wf.VERDICT_WORKED and row.digest in gone:
-                cost[row.digest].add(who(bundle))
+                cost[row.digest][bundle_identity(bundle)] = who(bundle)
     return cost
+
+
+def named(cost: dict[str, dict[str, str]]) -> str:
+    """The people behind a claims_cost map, for a message."""
+    return ", ".join(
+        sorted({n for group in cost.values() for n in group.values()})
+    )
+
+
+def lattice_line(old_matrix, new_matrix, mods) -> str:
+    """Which cells moved, by coordinate. The readout for a matrix repair."""
+    wf = mods["wig_format"]
+
+    def cells(matrix) -> dict[str, str]:
+        if matrix is None:
+            return {}
+        return {
+            wf.cell_key(c): wf.row_digest(c.pronto, 0, False)
+            for c in matrix.cells
+        }
+
+    was, now = cells(old_matrix), cells(new_matrix)
+    changed = sorted(k for k in set(was) & set(now) if was[k] != now[k])
+    added = sorted(set(now) - set(was))
+    removed = sorted(set(was) - set(now))
+
+    def listed(values: list[str]) -> str:
+        if not values:
+            return "none"
+        shown = ", ".join(values[:8])
+        more = f"; and {len(values) - 8} more" if len(values) > 8 else ""
+        return shown + more
+
+    same = len(set(was) & set(now)) - len(changed)
+    return (
+        f"{same} of {len(now)} cells byte-identical (was {len(was)}); "
+        f"added: {listed(added)}; changed: {listed(changed)}; "
+        f"removed: {listed(removed)}"
+    )
 
 
 def check_against_base(
@@ -997,12 +1185,24 @@ def check_against_base(
             else None
         )
         if old_cells != new_cells:
-            report.fail(
+            # THE MATRIX EXCEPTION (owner ruling 2026-08-08). A flat wig
+            # whose codes change becomes a new wig; a matrix repairs in
+            # place, keeping its id, because that is what HAIR's Update
+            # route does and because the format already makes it safe.
+            # Every matrix bundle pins its lattice with cells_hash, so a
+            # stale attestation FAILS loudly a few lines up rather than
+            # riding along looking current -- which is exactly the thing
+            # flat rows cannot do, and the whole reason they are treated
+            # differently.
+            report.note(
                 rel_path,
-                "the climate lattice changed but the wig_id did not. A "
-                "changed description is a NEW wig: save it as new in "
-                "HAIR, which stamps supersedes with this wig's id, and "
-                "submit that over this file",
+                "the climate lattice changed in place, which is the "
+                "matrix repair path. "
+                + lattice_line(old.wig.climate, new.wig.climate, mods)
+                + ". Every checklist that pinned "
+                f"{old_cells} is orphaned by it and counts toward nothing, "
+                "so this wig needs a fresh perfect fit against the "
+                "lattice it now carries",
             )
         return
 
@@ -1020,7 +1220,7 @@ def check_against_base(
     cost = claims_cost(
         old.wig, ov["changed_digests"] | ov["removed_digests"], wf
     )
-    proven_away = sorted({n for names in cost.values() for n in names})
+    proven_away = sorted({n for g in cost.values() for n in g.values()})
     report.fail(
         rel_path,
         "the codes changed but the wig_id did not. " + overlap_line(ov)
@@ -1218,7 +1418,20 @@ def check_shelf(
             continue
 
         ov = overlap(replaced.wig, shelved.wig, wf)
-        line = overlap_line(ov)
+        # The one number a reviewer needs and cannot see in a diff: how
+        # much proof the wig being replaced had accumulated. Stated as a
+        # FACT, never as a threshold -- what counts as "a lot" is policy
+        # and belongs in the reviewer's instructions, not baked in here
+        # where it would silently become the rule.
+        incumbent = len({
+            bundle_identity(b)
+            for b in wf.claims_of(replaced.wig)
+            if bundle_is_perfect(b, replaced.wig, mods)
+        })
+        line = (
+            f"replaces a wig with {incumbent} independent fitting(s). "
+            + overlap_line(ov)
+        )
 
         if ancestry[:1] == [replaced.wig_id]:
             report.note(path, f"supersedes {replaced.path}. {line}")
@@ -1276,16 +1489,47 @@ def check_shelf(
 
         dropped = claims_cost(replaced.wig, ov["removed_digests"], wf)
         if dropped:
-            names = sorted({n for group in dropped.values() for n in group})
-            report.warn(
-                path,
-                f"{len(dropped)} row(s) removed here carried claims by "
-                f"{', '.join(names)}. Trimming rows to reach a perfect "
-                "fit is the move the gate tempts, and it discards "
-                "somebody else's proof to do it. If your hardware "
-                "revision lacks these buttons, the answer is a revision "
-                "wig of your own, not a haircut on the shared file",
-            )
+            # Whose proof is being discarded decides whether this is a
+            # person changing their mind or a person deleting somebody
+            # else's work (owner ruling 2026-08-08). A key still present
+            # in the submitted file is withdrawing its own earlier word,
+            # which is theirs to withdraw. A key that is nowhere in the
+            # file cannot answer for itself, and the row leaves carrying
+            # proof nobody here is entitled to retract.
+            present = {
+                bundle_identity(b) for b in wf.claims_of(shelved.wig)
+            }
+            foreign = {
+                digest: {
+                    identity: name
+                    for identity, name in group.items()
+                    if identity not in present
+                }
+                for digest, group in dropped.items()
+            }
+            foreign = {d: g for d, g in foreign.items() if g}
+            if foreign:
+                report.fail(
+                    path,
+                    f"{len(foreign)} row(s) removed here carried proof by "
+                    f"{named(foreign)}, who is not a fitter on this file. "
+                    "Trimming rows to reach a perfect fit is the move the "
+                    "gate tempts, and it discards somebody else's work to "
+                    "do it. If your hardware revision lacks these "
+                    "buttons, submit your revision as its own wig rather "
+                    "than cutting them out of the shared one. If the "
+                    "codes are genuinely dead, say so in the pull request "
+                    "and a maintainer can merge past this",
+                )
+            own = {d: g for d, g in dropped.items() if d not in foreign}
+            if own:
+                report.warn(
+                    path,
+                    f"{len(own)} row(s) removed here carried "
+                    f"{named(own)}'s own earlier proof, withdrawn in this "
+                    "change. Theirs to withdraw, and still worth a "
+                    "sentence about what changed their mind",
+                )
 
     for path in sorted(removed_paths - claimed_ancestors):
         report.warn(

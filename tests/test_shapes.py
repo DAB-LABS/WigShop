@@ -182,10 +182,9 @@ def test_a_successor_must_clear_the_gate_on_its_own(
     assert has(report.failures, "no perfect fit", PATH)
 
 
-def test_trimming_rows_that_carried_other_peoples_claims_is_flagged(
-    shop, mods, david, mira
-):
-    """The move the perfect-only gate tempts. Visible in the digest diff."""
+def test_trimming_somebody_elses_proof_is_refused(shop, mods, david, mira):
+    """The move the perfect-only gate tempts, and it is not the
+    submitter's to make: Mira proved the row and is not on this file."""
     wig = make_wig(WIG_ID)
     attest(mods, wig, david)
     attest(mods, wig, mira)
@@ -196,9 +195,44 @@ def test_trimming_rows_that_carried_other_peoples_claims_is_flagged(
     attest(mods, haircut, david)
     shop.put(PATH, haircut)
     report = shop.validate(PATH, base_ref=base)
-    assert report.ok, report.failures  # a warning, for a human to weigh
-    assert has(report.warnings, "carried claims by", PATH)
-    assert has(report.warnings, "not a haircut on the shared file", PATH)
+    assert has(report.failures, "not a fitter on this file", PATH)
+    assert has(report.failures, "Mira", PATH)
+    # And the door is left open for the case where the code really is
+    # dead, because a maintainer can merge past a red check.
+    assert has(report.failures, "a maintainer can merge past this", PATH)
+
+
+def test_withdrawing_your_own_proof_is_only_a_warning(shop, mods, david):
+    """Yours to withdraw. A person may change their mind about a code
+    they proved, and that is not the same act as deleting a stranger's."""
+    wig = attest(mods, make_wig(WIG_ID), david)
+    shop.put(PATH, wig)
+    base = shop.merge("David fitted it whole")
+
+    smaller = make_wig(HEIR_ID, rows=2, supersedes=[WIG_ID])
+    attest(mods, smaller, david)
+    shop.put(PATH, smaller)
+    report = shop.validate(PATH, base_ref=base)
+    assert report.ok, report.failures
+    assert has(report.warnings, "own earlier proof, withdrawn", PATH)
+    assert not has(report.failures, "not a fitter on this file", PATH)
+
+
+def test_the_readout_names_how_proven_the_incumbent_was(
+    shop, mods, david, mira
+):
+    """A reviewing agent escalates on the fact, never on a threshold."""
+    wig = make_wig(WIG_ID)
+    attest(mods, wig, david)
+    attest(mods, wig, mira)
+    shop.put(PATH, wig)
+    base = shop.merge("two fitters")
+
+    heir = make_wig(HEIR_ID, rows=4, supersedes=[WIG_ID])
+    attest(mods, heir, david)
+    shop.put(PATH, heir)
+    report = shop.validate(PATH, base_ref=base)
+    assert has(report.notes, "replaces a wig with 2 independent fitting", PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -281,5 +315,28 @@ def test_a_trim_is_reported_as_a_trim(shop, mods, david, mira):
     attest(mods, haircut, david)
     shop.put(PATH, haircut)
     report = shop.validate(PATH, base_ref=base)
-    assert has(report.warnings, "removed here carried claims by", PATH)
+    assert has(report.failures, "removed here carried proof by", PATH)
     assert not has(report.warnings, "repaired row(s)", PATH)
+
+
+def test_a_second_fitter_with_an_exclusion_is_a_clean_pr(
+    shop, mods, david, mira
+):
+    """The commonest good pull request the shop will ever see.
+
+    Somebody else already proved the wig whole; this fitter's unit
+    lacks a button, so their bundle is scoped. It rides alongside and
+    changes nothing about the gate. Covered at the gate and in the
+    index before now, but never end to end against a base ref, which is
+    the only place the superset and ancestry checks run.
+    """
+    shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
+    base = shop.merge("David fitted it whole")
+
+    wig = attest(mods, make_wig(WIG_ID), david)
+    attest(mods, wig, mira, verdicts={"Speed Low": "not_on_device"})
+    shop.put(PATH, wig)
+    report = shop.validate(PATH, base_ref=base)
+    assert report.ok, report.failures
+    assert has(report.notes, "fittings added: Mira", PATH)
+    assert not report.warnings.get(PATH)
