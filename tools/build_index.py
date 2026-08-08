@@ -24,8 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from validate_wigs import (
     bundle_identity,
+    bundle_is_perfect,
     discover,
     load_hair,
+    matrix_checklist_digests,
 )
 
 HEADER = """# Index
@@ -97,25 +99,19 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     key is what decides whether a re-fit replaces or appends.
     """
     wf = mods["wig_format"]
-    wfit = mods["wig_fitting"]
 
     bundles = wf.claims_of(wig)
     digests = wf.wig_row_digests(wig)
+    expected = matrix_checklist_digests(wig, mods)
 
-    def complete(bundle) -> bool:
-        if not wfit.bundle_is_complete(bundle, wig, digests):
-            return False
-        if wig.climate is None:
-            return True
-        # A matrix checklist vouches for the lattice it sampled. If the
-        # lattice moved, the sample no longer describes this file, and
-        # counting it would put a number on the front page that the
-        # closet would not agree with.
-        return bool(bundle.cells_hash) and bundle.cells_hash == (
-            wf.cells_content_hash(wig.climate)
-        )
-
-    perfect = [b for b in bundles if complete(b)]
+    # ONE judgement, shared with the validator. These used to be two
+    # functions and they disagreed about matrix wigs: the index counted
+    # a one-row bundle over a whole lattice as a perfect fit while the
+    # validator refused the same file.
+    perfect = [
+        b for b in bundles
+        if bundle_is_perfect(b, wig, mods, digests, expected)
+    ]
     fitters = {bundle_identity(b) for b in bundles}
     fittings = {bundle_identity(b) for b in perfect}
     handles = sorted({b.handle for b in perfect if b.handle})
