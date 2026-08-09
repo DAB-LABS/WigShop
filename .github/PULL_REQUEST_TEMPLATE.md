@@ -42,13 +42,13 @@ Skip this section if you are adding your fitting to a wig that is already on the
 ## Adding your fitting to a wig already here
 
 - [ ] I downloaded the current file from this repo before fitting it, so my file carries everyone else's fittings alongside mine.
-- [ ] **My fitting may be partial, and that is fine here.** A row your unit does not have, or one you could not make work, is an honest exclusion rather than a failure. Somebody has already proven this wig whole; your signature rides alongside theirs and does not have to repeat the feat.
+- [ ] I proved every code in it, the same as anyone opening a wig. Your name going on the file is what tells the next person it is worth downloading.
 
 <!--
 A note on the filename, since it misleads: the -perfect-fit suffix
-describes the WIG, not you. A wig somebody else proved whole downloads
-as -perfect-fit no matter how much of it you personally vouched for. The
-shop reads the claims in the file and never the name.
+describes the WIG, not you. A wig somebody else already proved downloads
+as -perfect-fit before you have touched it. The shop reads the claims
+inside the file and never the name.
 -->
 
 **Leave any box unticked if it is not your situation.** That is the right answer, not a gap.

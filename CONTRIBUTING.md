@@ -20,11 +20,13 @@ That is the whole barrier. No account here, no build tools, no git beyond openin
 
 **A wig lands here when one person has proven every code in it, on their own hardware, in one attestation.**
 
-Partial fittings, however honest, stay home. A file where three people each proved a third is a file nobody has watched work end to end, and the front page of this shop gets to say one sentence with no asterisk.
+Not "we proved it between us", and not "everything except the Eject button". A file where three people each proved a third is a file nobody has watched work end to end. Holding that line is what lets the front page of this shop say one sentence with no asterisk.
 
-Once a wig is here, a partial attestation is welcome alongside the whole one. Somebody whose hardware revision lacks a button can still vouch for the rows they have, and their signature is worth having. It just cannot be the thing that opens the door.
+So there is nothing to send but a perfect fit. If you could not make every button work, the wig is not ready.
 
-**If your hardware revision is missing buttons a shop wig carries, do not trim the shared file to fit your unit.** Submit your revision as its own wig, named for what it is, with the product identifiers that tell it apart. A smaller wig that wholly works beats a bigger one that mostly does.
+**It is king of the hill.** One wig per device sits on the shelf, and it stays there until something better takes its place. If you think yours is the better description of that device, prove all of it and send it up. If it is not better, the one already there wins, and the best thing you can do is add your name to it.
+
+**One exception, and it is about hardware rather than effort.** If your unit is genuinely a different model, missing buttons the shop wig carries, do not trim the shared file to fit it. Submit your revision as its own wig, named for what it is, with the product identifiers that tell it apart. A smaller wig that wholly works beats a bigger one that mostly does.
 
 ---
 
@@ -39,8 +41,6 @@ The proving ground is the device, not a dialog.
 5. Sign it, with your name and your GitHub handle.
 
 Put your GitHub handle in. On a signed fitting nothing counts it -- the shop counts signing keys, because a name is what somebody typed and a key is which install they typed it on. It still earns its place three ways: it is how somebody can reach you about a code that stopped working, it is how a maintainer notices that two fittings came from one person on two machines when independence is being counted at promotion, and on an *unsigned* fitting it is the only thing the shop can tell you apart by, so leaving it off there really does cost you.
-
-**A row your hardware refuses gets excluded honestly.** *Not on my device* and *could not make it work* are recorded in standard form rather than as prose, so three people excluding the same row reads as a pattern instead of three sentences somebody has to interpret. A row you exclude is a row you did not prove, which means that fitting is not a perfect fit -- see above for what to do about it.
 
 **Your signature binds each row's transmit recipe by digest**, under a key generated on your install. Nobody can alter your verdicts or fit in your name. Fix one bad code later and only that row's claims retire; everything else anyone proved still stands.
 
@@ -80,7 +80,7 @@ The checkboxes in the template are easier to tick after the pull request is open
 
 ## Adding your fitting to a wig already here
 
-This is the most useful thing you can do here, and it is the easiest pull request there is.
+**This is the most valuable thing you can do here, and it is the easiest pull request there is.**
 
 1. **Download the current wig from this repo.** Not an older copy from your Closet.
 2. Drop it on HAIR's Closet, adopt it, live with it.
@@ -92,6 +92,8 @@ The diff should be one appended fitting and zero changed codes.
 **Why step 1 matters.** The wig in this repo carries every fitting anyone has recorded. If you fit a copy you downloaded last month, your file is missing the fittings that landed since, and replacing the repo's copy with yours would delete somebody else's work. Git will not warn you, because dropping an array entry is a perfectly clean diff. The checks catch it and refuse the pull request, but you will save yourself a round trip by starting from the current file.
 
 **Re-fitting a wig you already proved is fine.** Your new signing replaces your old one, so the diff shows one fitting removed and one added carrying the same key. The checks read that as what it is.
+
+**What your name actually does.** A wig with one fitting is one person's word. A wig with four is four people, four units, four rooms, four different blasters, all arriving at the same answer. Nobody can fake that and no tool can generate it. Adding yours says plainly to the next person that this wig is good and they should use it -- and the wigs with the most people behind them are the ones [WigFactory](https://github.com/DAB-LABS/WigFactory) picks up and turns into real installable Home Assistant integrations. The best of those can go further still, into Home Assistant Core, where somebody adds your device without ever hearing of this repo. That whole path is fed by people pressing buttons and signing for what they saw.
 
 ---
 
@@ -153,7 +155,7 @@ So you know before you open the pull request:
 
 None of this is new logic invented for the shop. [`validate.yml`](.github/workflows/validate.yml) checks out HAIR at a pinned release and runs the same parser your own install runs on import, so a wig that passes here is a wig that loads there. The format itself is documented in [HAIR's wig format contract](https://github.com/DAB-LABS/HAIR/blob/main/docs/wig-format.md), which is everything you need if you are writing a tool that emits wigs.
 
-A good deal comes back as a warning rather than a failure, because it needs a person to look rather than a rule to fire: an unsigned fitting, a brand field that disagrees with its folder, a missing `kind`, claims about rows the wig no longer carries, lineage the shop cannot trace, rows leaving a wig that carried somebody else's proof, and several people reporting the same code does not work on their hardware. That last one is why the exclusion reasons are a fixed set rather than free text: one person is a hardware revision, several is a sign the code itself is wrong.
+A good deal comes back as a warning rather than a failure, because it needs a person to look rather than a rule to fire: an unsigned fitting, a brand field that disagrees with its folder, a missing `kind`, claims about rows the wig no longer carries, lineage the shop cannot trace, rows leaving a wig that carried somebody else's proof, and a wig that is perfectly fitted while its comb receipt still lists suspects. That last one is worth opening: both can be true, but a signature does not make an odd-looking code normal.
 
 ---
 
