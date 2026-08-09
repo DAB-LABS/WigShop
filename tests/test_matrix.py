@@ -95,7 +95,7 @@ def test_the_index_agrees_with_the_validator(shop, mods, david):
         line for line in shop.index().splitlines()
         if line.startswith("|") and "Bench AC" in line
     )
-    assert "| 0 | 1 |" in row
+    assert "| 0 |" in row
 
 
 def test_a_bundle_pinning_a_stale_lattice_is_orphaned(shop, mods, david):

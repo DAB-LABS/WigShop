@@ -38,20 +38,22 @@ so edits here are overwritten. Change a wig, not this page.
 
 **Fittings** is how many people have proven every row of this wig on
 their own hardware. It is the closest thing to a rating this repo has,
-and unlike a star it costs somebody real time at real hardware. Every
-wig here has at least one, because that is the door: a wig lands when
-one person has watched the whole thing work. Three fittings from three
-different people makes a wig eligible for
-[WigFactory](https://github.com/DAB-LABS/WigFactory).
+and unlike a star it costs somebody real time in front of real
+hardware. Every wig here has at least one, because that is the door.
 
-**Fitters** is how many people have attested at all. It is never
-smaller than Fittings, and the gap is honest partial attestations:
-somebody whose hardware revision lacks a button can still vouch for the
-rows they have, and their signature is worth having even though it
-could not have opened the door on its own.
+One fitting is one person's word. Four is four people, four units, four
+rooms, four blasters, all reaching the same answer, and there is no way
+to fake that or generate it. It is also the number that decides which
+wigs get picked up by
+[WigFactory](https://github.com/DAB-LABS/WigFactory) and turned into
+installable Home Assistant integrations. If a wig here works for you,
+proving it is the most useful thing you can do.
 
-Both numbers count signing keys rather than names, because a name is
-what somebody typed and a key is which install they typed it on.
+The count is by signing key rather than by name, because a name is what
+somebody typed and a key is which install they typed it on. It counts
+the wig on the shelf right now: when a wig is replaced by a corrected
+one, the successor starts over, because nobody has proven the new
+description yet.
 
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
@@ -89,14 +91,14 @@ def escape(value: str) -> str:
 def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     """One table row, plus the sort keys behind it.
 
-    Fittings counts PERFECT fits using HAIR's ``bundle_is_complete``, so
-    the number means exactly what a green check means in the Closet.
-    Fitters counts everybody who attested, whole or partial.
+    One number, and it is perfect fits: people whose claims cover every
+    row of this wig. That is the shop's gate and the shop's rating at
+    once, which is the point -- there is nothing else to explain.
 
-    Both are counted by signing key rather than by handle. Handles carry
-    no uniqueness -- two people called David are two people when their
-    keys differ, and one person is never two -- and since HAIR 0.9.7 the
-    key is what decides whether a re-fit replaces or appends.
+    Counted by signing key rather than by handle. Handles carry no
+    uniqueness -- two people called David are two people when their keys
+    differ, and one person is never two -- and since HAIR 0.9.7 the key
+    is what decides whether a re-fit replaces or appends.
     """
     wf = mods["wig_format"]
 
@@ -112,7 +114,6 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
         b for b in bundles
         if bundle_is_perfect(b, wig, mods, digests, expected)
     ]
-    fitters = {bundle_identity(b) for b in bundles}
     fittings = {bundle_identity(b) for b in perfect}
     handles = sorted({b.handle for b in perfect if b.handle})
 
@@ -126,15 +127,13 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     link = f"[{name}]({rel_path})"
 
     row = (
-        "| {brand} | {kind} | {model} | {link} | {count} | {fitters} "
-        "| {who} | {ids} |"
+        "| {brand} | {kind} | {model} | {link} | {count} | {who} | {ids} |"
     ).format(
         brand=escape(brand),
         kind=escape(wig.kind or ""),
         model=escape(wig.model or ""),
         link=link,
         count=len(fittings),
-        fitters=len(fitters),
         who=escape(", ".join(handles)),
         ids=escape("; ".join(ids)),
     )
@@ -184,9 +183,9 @@ def build(root: Path, mods) -> str:
 
     parts.append(
         f"\n{len(rows)} wig(s).\n\n"
-        "| Brand | Kind | Model | Wig | Fittings | Fitters | Fitted by "
+        "| Brand | Kind | Model | Wig | Fittings | Fitted by "
         "| Identifiers |\n"
-        "|---|---|---|---|---:|---:|---|---|\n"
+        "|---|---|---|---|---:|---|---|\n"
     )
     parts.append("\n".join(row for row, _, _ in rows))
     parts.append("\n")

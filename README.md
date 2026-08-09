@@ -25,7 +25,7 @@ It is also not comprehensive and never will be. It covers whatever people proved
 3. In Home Assistant, open HAIR, go to the **Closet**, and drop the file on the drop bar.
 4. **ADOPT** turns it into a working device, or **CLIP** opens it on the Clipper if you want to look before you commit.
 
-If it works for you, come back and add your fitting. That is how the next person knows it was not a fluke.
+If it works for you, come back and prove it. Your fitting is a vote: it tells the next person this wig is worth downloading, and it is what eventually turns a file in a folder into a real Home Assistant integration.
 
 ---
 
@@ -35,19 +35,19 @@ A fitting is the record of somebody proving a wig. The proving ground is the dev
 
 Fittings ride inside the wig file. One file carries the codes and every proof anyone has recorded against them.
 
-Four things make a fitting worth something:
+Three things make a fitting worth something:
 
 **It is per row.** Not "this wig works" but "these forty buttons work, one at a time, and I pressed all of them."
 
 **It is bound to the recipe, not to the file.** Each claim carries a digest of one row's transmit recipe: the bytes, the repeat frames appended to them, and whether the encoder is bypassed. Fix one bad code later and only that row's claims retire. Everything else anyone proved still stands, and renaming a button costs nothing, because names were never in the digest.
 
-**It is honest about what it does not cover.** A row your hardware does not have, or one you could not make work, is recorded as an exclusion in standard form rather than as a failure. So people can tell the truth about their own unit, and so the shop can count the pattern when several of them report the same code dead.
-
 **It is signed.** HAIR signs with a key generated on your install. The signature proves the record has not been altered since you made it, and that fittings sharing a key came from one install. Identity is the key, not the typed name: two people who both type "David" are two people, and one person re-fitting the same wig replaces their own earlier word rather than stacking a second.
 
 Fittings are social proof, not identity. The handle is what you typed. Nobody is claiming more than that.
 
-**Perfect fits only.** A wig lands here when one person's claims cover every row of it. A file where three people each proved a third is a file nobody has watched work end to end, so union coverage is real and worth knowing and it is not the door. Once a wig is here, an honest partial fitting is welcome alongside the whole one.
+**Perfect fits only.** A wig lands here when one person's claims cover every row of it. A file where three people each proved a third is a file nobody has watched work end to end, and that is not the same thing at all.
+
+**It is king of the hill.** One wig per device sits on the shelf, and it stays there until something better takes its place. If you think yours is the better description of that device, prove all of it and send it up. If it is not better, the one already there wins, and the best thing you can do is put your name on it.
 
 ---
 
@@ -68,7 +68,7 @@ HAIR names the download from the wig's own fields, which is the same shape this 
 
 ### A fitting on a wig that is already here
 
-Even better, and it is the same one file.
+**This is the most valuable thing you can do here,** and it is the same one file.
 
 1. **Download the current wig from this repo**, not an older copy you already had. It carries everyone else's fittings, and you want yours added to theirs rather than replacing them.
 2. Drop it on the Closet, adopt it, live with it, then fit it.
@@ -76,11 +76,13 @@ Even better, and it is the same one file.
 
 The checks confirm no existing fitting went missing. If one did, you fitted an older copy, and the pull request is refused with that reason rather than quietly losing somebody's work.
 
+**Why it matters more than it looks.** A wig with one fitting is one person's word. A wig with four is four people, four units, four rooms, four blasters, all reaching the same answer. That is the difference between a file somebody uploaded and a file you can trust on sight, and there is no way to fake it or automate it. Every fitting you add makes the wig easier for the next person to pick up, and it is the number that decides which wigs graduate.
+
 ### A wig that needs fixing
 
 Repair the code on your device, not in the file, then let HAIR save your device as the successor: it carries the lineage automatically. Your file replaces the old one on the shelf, and it needs its own perfect fit, because nobody has proven the new description yet. See [CONTRIBUTING.md](CONTRIBUTING.md#when-the-wig-is-wrong-or-your-device-outgrew-it).
 
-A wig with five independent fittings is the most proven thing in here, and the most used. That count is the only honest popularity signal a git repo can offer, so it is the one we use.
+The fitting count is the only honest popularity signal a git repo can offer, and it happens to be the right one: the most proven wig is usually also the most used. It is also what [WigFactory](https://github.com/DAB-LABS/WigFactory) watches when it goes looking for wigs to promote.
 
 ---
 
@@ -115,7 +117,9 @@ The shop never reads the tier suffix as evidence. It runs the claims in the file
 
 ## Where wigs go from here
 
-Some of these graduate. A wig proven end to end by three different people is eligible for [WigFactory](https://github.com/DAB-LABS/WigFactory), which turns a proven code set into an installable Home Assistant integration, named for the wig's brand, kind and model. Codes that belong upstream go upstream, to Home Assistant's own `infrared-protocols`, which is the better home when the door is open.
+Some of these graduate, and fittings are what decides which ones. The wigs with the most people behind them get picked up by [WigFactory](https://github.com/DAB-LABS/WigFactory), which turns a proven code set into a real installable Home Assistant integration, named for the wig's brand, kind and model. From there the best of them can go further still, into Home Assistant Core itself, where somebody adds your device without ever knowing this repo exists.
+
+That path starts with somebody pressing every button on a remote and signing for it. Nothing else feeds it.
 
 When a wig graduates, its entry stays right here with a pointer to where it went. The shop does not empty out. It becomes the record of how each one got there.
 
