@@ -63,18 +63,23 @@ Checks run on the pull request. A human then confirms it is not a duplicate and 
 
 ### Doing it without git
 
-You do not need a terminal, a clone, or any tooling. The whole thing works in a browser.
+You do not need a terminal, a clone, or any tooling. The whole thing works in a browser. It just has to start with a fork, because **GitHub only lets you upload files to a repository you can push to**, and that means your own copy rather than this one.
 
-**If the brand folder does not exist yet**, which it will not for a brand nobody has posted:
+**Step one, once ever:** click **Fork** at the top right of this repo. That gives you `your-name/WigShop`, which you can upload to freely. You keep it and reuse it for every wig you ever send.
 
-1. On your own machine, make a folder named after the brand, lowercase, and put the wig inside it. For a Sanmli light that is a folder `sanmli` containing `sanmli-light-th-05-perfect-fit.wig.json`.
-2. On GitHub, click into the [`wigs/`](wigs/) folder, then **Add file** and **Upload files**.
-3. Drag the whole brand folder onto the page. GitHub keeps the folder structure, so it lands at the right path.
-4. At the bottom, choose **Create a new branch for this commit and start a pull request**, then **Propose changes**. The template loads and you fill it in.
+**Then, for each wig:**
 
-**If the brand folder already exists**, click into it first, then **Add file** and **Upload files**, and drag the file itself.
+1. Go to your fork and click into its `wigs/` folder. (Not this repo's -- your fork is at `github.com/your-name/WigShop`.)
+2. Click **Add file**, then **Upload files**.
+3. **If the brand folder already exists**, click into it first and drag your wig in. **If it does not** -- which it will not for a brand nobody has posted -- make a folder on your own machine named after the brand, lowercase, put the wig inside it, and drag the whole folder onto the page. GitHub keeps the structure, so it lands at the right path. For a Sanmli light that is a folder `sanmli` containing `sanmli-light-th-05-perfect-fit.wig.json`.
+4. At the bottom, choose **Commit directly to the main branch** (it is your fork, so this is safe) or make a new branch if you prefer, then **Commit changes**.
+5. GitHub shows a banner offering to **Compare & pull request**. Click it. Check the pull request is aimed at `DAB-LABS/WigShop`, fill in the template, and open it.
+
+If you have forked before and your copy is behind, click **Sync fork** on your fork's front page first. That matters when you are adding your fitting to a wig already here, because you want the current file with everyone else's fittings in it.
 
 The checkboxes in the template are easier to tick after the pull request is open: submit it, then click them in the rendered description. Typing `[x]` by hand works too, but the spacing inside the brackets has to be exact.
+
+If any of this goes wrong, open an issue and say where you got stuck. The instructions being wrong is our problem, not yours.
 
 ---
 
