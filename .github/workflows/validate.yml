@@ -23,6 +23,11 @@ env:
 
 jobs:
   validate:
+    # actions:read is for fetching this pull request's previous
+    # evaluation, so the new one can say what changed.
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-latest
     steps:
       - name: Check out the shop
@@ -71,6 +76,26 @@ jobs:
       # not anything names it -- and a supersession that renames a file
       # is paired by wig_id rather than by path, which no diff of names
       # could do.
+      - name: Fetch this pull request's last evaluation
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          prev=$(gh run list \
+            --repo "$GITHUB_REPOSITORY" \
+            --branch "${{ github.head_ref }}" \
+            --workflow "Validate wigs" \
+            --json databaseId,headSha --limit 20 \
+            --jq "[.[] | select(.headSha != \"$GITHUB_SHA\")][0].databaseId")
+          if [ -n "$prev" ] && [ "$prev" != "null" ]; then
+            echo "Previous run: $prev"
+            gh run download "$prev" --repo "$GITHUB_REPOSITORY" \
+              -n evaluation -D previous || true
+          else
+            echo "No previous run on this branch; first evaluation."
+          fi
+
       - name: Validate
         run: |
           args=""
@@ -81,6 +106,33 @@ jobs:
             --hair-src .hair \
             $args \
             ${{ steps.changed.outputs.files }}
+
+      # always(), because a refused wig is exactly when somebody wants
+      # to read the evaluation, and a Validate step that exited 1 would
+      # otherwise skip it.
+      - name: Write the evaluation
+        if: always()
+        run: |
+          args=""
+          if [ -n "${{ steps.changed.outputs.base }}" ]; then
+            args="--base-ref ${{ steps.changed.outputs.base }}"
+          fi
+          if [ -f previous/evaluation.md ]; then
+            args="$args --previous previous/evaluation.md"
+          fi
+          python3 tools/evaluate.py \
+            --hair-src .hair \
+            --hair-ref "${{ env.HAIR_REF }}" \
+            --pr "${{ github.event.pull_request.number }}" \
+            $args \
+            ${{ steps.changed.outputs.files }}
+
+      - name: Keep the evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluation
+          path: evaluation.md
 
   tools:
     # The validator decides whether a stranger's signed work survives a
