@@ -441,6 +441,63 @@ def checklist_of(mods, wig: dict):
     return mods["wig_climate"].dimension_checklist(parsed.climate)
 
 
+def repair_cells(
+    wig: dict,
+    coordinates: list[tuple],
+    *,
+    tier: str = "rule-derived",
+    run: str = "run0001",
+    tested: list[str] | None = None,
+    disagreed: bool = False,
+) -> dict:
+    """Stamp HAIR repair records onto named lattice cells.
+
+    Mimics what Detangle writes when somebody works the Needs attention
+    list: the record rides in the cell's own extras by the unknown-keys
+    contract, carrying the tier, the run it belonged to, the prior bytes
+    for a one-step undo, and the cells that were proved on air for it.
+
+    MUST be called before the wig is attested. Cell extras are inside
+    ``cells_content_hash``, so a repair stamped afterwards would not
+    match the bundle's ``cells_hash`` -- which is the format protecting
+    the repair trail, and is worth knowing rather than working around.
+
+    ``coordinates`` are ``(mode, fan, temp)`` triples.
+    """
+    wanted = set(coordinates)
+    for cell in wig["climate"]["cells"]:
+        key = (cell["mode"], cell.get("fan"), cell.get("temp"))
+        if key not in wanted:
+            continue
+        record = {
+            "origin": "fix",
+            "source": "donor",
+            "applied": "2026-09-02T00:00:00Z",
+            "tested": True,
+            "sends_fired": 1 if tier == "air-tested" else 0,
+            "tier": tier,
+            "run": run,
+            "prior": {"pronto": cell["pronto"], "digest": "0" * 16},
+            "finding": {
+                "key": "/".join(
+                    str(x) for x in key if x is not None
+                ),
+                "classes": ["field-mismatch"],
+            },
+        }
+        if tested:
+            record["tested_cells"] = list(tested)
+        if disagreed:
+            record["reading_disagreed"] = {
+                "user_attested": True,
+                "reads_as": {"temperature": 23},
+                "claims": {"temperature": 22},
+                "mismatches": ["temperature"],
+            }
+        cell["hair_repair"] = record
+    return wig
+
+
 def attest_matrix(
     mods,
     wig: dict,
