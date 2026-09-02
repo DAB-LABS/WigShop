@@ -40,6 +40,9 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install
+        run: pip install --quiet pyyaml
+
       - name: Rebuild the index
         run: python3 tools/build_index.py --hair-src .hair
 
