@@ -10,10 +10,12 @@ from __future__ import annotations
 import pytest
 from conftest import (
     Person,
+    attest,
     attest_matrix,
     checklist_of,
     has,
     make_matrix_wig,
+    make_wig,
 )
 
 PATH = "wigs/bench/bench-ac-a-1.wig.json"
@@ -35,13 +37,19 @@ def mira():
 # ---------------------------------------------------------------------------
 
 
-def test_hairs_own_judgment_passes_a_one_row_bundle(mods):
-    """The bug this file exists for, stated against HAIR itself.
+def test_hair_now_refuses_a_one_row_bundle(mods):
+    """The hole this file was written for, now closed upstream.
 
-    Not a criticism of HAIR -- its fix lands in the perfect-or-nothing
-    round -- but files minted by 0.9.7 installs are in the wild now, so
-    the shop must not trust this answer. If this test ever fails, HAIR
-    has fixed it and the shop's own check has become belt and braces.
+    Under 0.9.7 this asserted True: HAIR called a single signed claim
+    over a sixteen-cell lattice complete, and the shop had to derive
+    the dimension checklist itself to refuse it. The 0.14.0 pin fixes
+    that, so the assertion is inverted rather than deleted.
+
+    The shop's own check stays either way. Files minted by 0.9.7
+    installs are still in the wild, and the shop must not depend on the
+    pin to refuse them; if this ever asserts True again,
+    ``test_the_shop_refuses_a_one_row_bundle`` is the only thing left
+    standing between a forged bundle and the shelf.
     """
     import json
 
@@ -51,7 +59,7 @@ def test_hairs_own_judgment_passes_a_one_row_bundle(mods):
     bundle = wf.claims_of(parsed)[0]
     assert len(bundle.rows) == 1
     assert len(parsed.climate.cells) == 16
-    assert wfit.bundle_is_complete(bundle, parsed) is True
+    assert wfit.bundle_is_complete(bundle, parsed) is False
 
 
 def test_the_shop_refuses_a_one_row_bundle(shop, mods, david):
@@ -159,3 +167,97 @@ def test_a_repaired_lattice_still_needs_a_fresh_perfect_fit(
     report = shop.validate(PATH, base_ref=base)
     assert has(report.failures, "no perfect fit", PATH)
     assert has(report.warnings, "vouched for a different lattice", PATH)
+
+
+# ---------------------------------------------------------------------------
+# The receipt is a hint. Combing is the evidence.
+# ---------------------------------------------------------------------------
+
+
+def test_the_shop_combs_rather_than_reading_the_receipt(shop, mods, david):
+    """A forged clean bill buys nothing.
+
+    Until the 0.14.0 pin the shop read ``comb.suspects`` out of the file
+    and believed it, which meant a wig could arrive carrying a clean
+    bill nobody ever gave it. The first matrix the shop received stated
+    zero suspects and combed to fifty-two, honestly enough -- its
+    receipt was simply older than the check. But the same shape works
+    on purpose, and nothing in a text file stops it.
+
+    So the receipt is what the fitter saw, and the comb run here is
+    what the shop decides on.
+    """
+    wig = make_matrix_wig(WIG_ID)
+    # Two cells swap codes: each now sends its neighbour's, which no
+    # dimension checklist samples and no signature can notice.
+    cells = wig["climate"]["cells"]
+    cells[0]["pronto"], cells[1]["pronto"] = (
+        cells[1]["pronto"], cells[0]["pronto"],
+    )
+    wig["comb"] = {
+        "version": 2, "date": "2026-09-01",
+        "suspects": 0, "counts": {}, "findings": [],
+    }
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.warnings, "combing found", PATH)
+    assert has(report.warnings, "current enough to have known", PATH)
+
+
+def test_an_older_receipt_is_not_accused_of_lying(shop, mods, david):
+    """Version 1 predates the checks, so a disagreement is housekeeping.
+
+    Every wig minted before HAIR 0.11.0 carries a version 1 receipt.
+    Calling all of them discrepancies would cry wolf across the whole
+    shelf and teach a reviewer to skim past the warning that matters.
+    """
+    wig = make_matrix_wig(WIG_ID)
+    cells = wig["climate"]["cells"]
+    cells[0]["pronto"], cells[1]["pronto"] = (
+        cells[1]["pronto"], cells[0]["pronto"],
+    )
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "older than the checks", PATH)
+    assert not has(report.warnings, "current enough to have known", PATH)
+
+
+def test_an_unreadable_lattice_does_not_read_as_a_clean_one(
+    shop, mods, david
+):
+    """Silence on a lattice is the dangerous answer, so it is a warning.
+
+    A flat remote gets frame self-consistency whatever its protocol, so
+    a missing field map costs it nothing worth a line. A lattice is the
+    opposite: the fitting attests fourteen cells out of hundreds, and
+    with no map the field check cannot run either, which leaves the
+    rest examined by nothing at all.
+    """
+    shop.put(PATH, attest_matrix(mods, make_matrix_wig(WIG_ID), david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.warnings, "no field map covers this lattice", PATH)
+    assert has(report.warnings, "Unchecked is not the same as clean", PATH)
+
+
+def test_a_flat_wig_is_not_nagged_about_field_maps(shop, mods, david):
+    """The same silence on a flat remote is not worth saying.
+
+    Almost no flat remote has a field map, and a line on every fan and
+    television in the shop would bury the findings that matter.
+    """
+    flat = "wigs/bench/bench-fan-b-1.wig.json"
+    shop.put(
+        flat,
+        attest(mods, make_wig("33333333-3333-4333-8333-333333333333"), david),
+    )
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert not has(report.warnings, "field map", flat)
+    assert not has(report.notes, "field map", flat)

@@ -19,7 +19,7 @@ on:
   workflow_dispatch:
 
 env:
-  HAIR_REF: v0.9.7
+  HAIR_REF: v0.14.0
 
 jobs:
   validate:
@@ -44,7 +44,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install signature verification
-        run: pip install --quiet cryptography
+        run: pip install --quiet cryptography pyyaml
 
       - name: Work out which wigs changed
         id: changed
@@ -104,7 +104,7 @@ jobs:
           python-version: "3.13"
 
       - name: Install
-        run: pip install --quiet cryptography pytest ruff
+        run: pip install --quiet cryptography pytest ruff pyyaml
 
       - name: Lint
         run: ruff check tools/ tests/
