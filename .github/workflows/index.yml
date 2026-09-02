@@ -18,7 +18,7 @@ permissions:
   contents: write
 
 env:
-  HAIR_REF: v0.9.7
+  HAIR_REF: v0.14.0
 
 jobs:
   rebuild:

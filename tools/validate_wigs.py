@@ -128,17 +128,35 @@ def load_hair(hair_src: str):
     sys.modules["hairfmt"] = stub
 
     mods = {}
+    # Order matters: each module is executed as it is registered, so a
+    # dependency has to be in place before whatever imports it.
+    # ``decoders`` is a package rather than a module, and wig_comb
+    # imports from it.
     for name in (
         "const",
+        "decoders",
         "pronto_validator",
+        "field_readers",
         "wig_format",
         "wig_climate",
         "wig_fitting",
         "fitting_signing",
+        "wig_comb",
     ):
-        spec = importlib.util.spec_from_file_location(
-            f"hairfmt.{name}", hair_dir / f"{name}.py"
-        )
+        target = hair_dir / name
+        if target.is_dir():
+            package = types.ModuleType(f"hairfmt.{name}")
+            package.__path__ = [str(target)]
+            sys.modules[f"hairfmt.{name}"] = package
+            spec = importlib.util.spec_from_file_location(
+                f"hairfmt.{name}",
+                target / "__init__.py",
+                submodule_search_locations=[str(target)],
+            )
+        else:
+            spec = importlib.util.spec_from_file_location(
+                f"hairfmt.{name}", hair_dir / f"{name}.py"
+            )
         module = importlib.util.module_from_spec(spec)
         sys.modules[f"hairfmt.{name}"] = module
         spec.loader.exec_module(module)
@@ -746,97 +764,235 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
         )
 
 
-def check_comb(rel_path: str, wig, report: Report) -> None:
-    """Surface what combing found, if anyone combed this wig.
+#: The receipt version the pinned HAIR writes. A receipt older than
+#: this cannot be expected to know about checks that shipped after it,
+#: so a disagreement with one is housekeeping rather than a discrepancy.
+RECEIPT_VERSION = 2
+
+
+def _today() -> str:
+    """The date a freshly derived receipt is stamped with."""
+    from datetime import date
+
+    return date.today().isoformat()
+
+
+def stored_receipt(wig) -> dict | None:
+    """The comb receipt the FILE claims, if it carries a readable one."""
+    comb = wig.extra.get("comb")
+    return comb if isinstance(comb, dict) else None
+
+
+def live_comb(wig, mods):
+    """Comb this wig here, now, with the pinned HAIR.
+
+    The shop used to read ``comb.suspects`` out of the file and believe
+    it. But a receipt is written by whoever combed, and the file is text
+    a contributor can edit, so a wig can arrive carrying a clean bill
+    nobody ever gave it. The first matrix the shop received stated zero
+    suspects and combs to fifty-two.
+
+    So the stored receipt is a HINT about what the fitter saw, and this
+    is the evidence. Returns ``None`` only if the pinned HAIR has no
+    comb at all, which cannot happen at the current pin and is handled
+    so that a rollback degrades instead of crashing.
+    """
+    wcomb = mods.get("wig_comb")
+    if wcomb is None:
+        return None
+    return wcomb.comb_wig(wig)
+
+
+def check_comb(rel_path: str, wig, mods, report: Report) -> None:
+    """Comb the wig and say what came out.
 
     A fitting attests the dimension checklist, which on a matrix wig is
-    nine or so rows out of a lattice of hundreds. Codes outside the
-    checklist can be wrong and no fitting will ever say so: the
-    Toyotomi example carries three cells that send their neighbour's
-    code, none of them in its checklist, under a complete signed
-    fitting. The comb receipt is the only thing in the file that knows,
-    so reading past it means merging a wig whose own paperwork says it
-    is broken.
+    fourteen or so rows out of a lattice of hundreds. Codes outside the
+    checklist can be wrong and no fitting will ever say so: the shop's
+    first matrix carried fifty-two cells sending their neighbour's
+    temperature, none of them in its checklist, under a complete signed
+    fitting that was honestly earned. Combing is the only instrument
+    that can see them.
 
     Warnings, never failures. Combing reports and never changes a code,
-    ``suspects`` is defined as findings a human should look at, and a
-    wig with three bad cells out of a hundred and eighty is still worth
-    having. This puts it in front of the maintainer and stops there.
+    a suspect is a finding a human should look at, and a wig with three
+    bad cells out of a hundred and eighty is still worth having. This
+    puts it in front of the maintainer and stops there.
     """
-    comb = wig.extra.get("comb")
+    findings = live_comb(wig, mods)
+    stored = stored_receipt(wig)
 
-    if comb is None:
-        report.warn(
-            rel_path,
-            "no comb receipt, so nobody has checked this wig's codes "
-            "against each other. Not the same as clean: import it into "
-            "HAIR 0.9.1 or newer, or press the comb on its closet row, "
-            "and share it again to carry the result",
-        )
+    if findings is None:
+        # The pinned HAIR predates combing. Fall back to the receipt,
+        # which is all the shop had before the 0.14.0 pin.
+        if stored is None:
+            report.warn(
+                rel_path,
+                "no comb receipt, and the pinned HAIR cannot comb. "
+                "Nothing has checked this wig's codes against each other",
+            )
         return
 
-    if not isinstance(comb, dict):
-        report.warn(rel_path, '"comb" is not an object; ignored')
-        return
+    receipt = findings.to_receipt(_today())
+    suspects = receipt.get("suspects") or 0
+    counts = receipt.get("counts") or {}
 
-    suspects = comb.get("suspects")
-    if not isinstance(suspects, int):
-        report.warn(rel_path, 'comb receipt has no readable "suspects" count')
-        return
+    _report_receipt_drift(rel_path, stored, suspects, report)
+    _report_coverage(rel_path, wig, receipt, report)
 
     if suspects == 0:
         return
 
-    counts = comb.get("counts")
-    detail = ""
-    if isinstance(counts, dict) and counts:
-        detail = "; ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
-    dated = comb.get("date")
+    detail = "; ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
     report.warn(
         rel_path,
         f"combing found {suspects} suspect(s)"
         + (f" ({detail})" if detail else "")
-        + (f", recorded {dated}" if dated else "")
-        + ". Worth reading the receipt before merging",
+        + ". Worth reading before merging",
     )
+    _report_findings(rel_path, findings, report)
 
-    # The one class worth naming individually. A malformed frame is
-    # ignored by the device, which is annoying but obvious. A cell
-    # sending its neighbour's code makes the device respond and look
-    # like it worked while landing on the wrong state, so nobody
-    # notices until they wonder why the room is a degree off.
-    findings = comb.get("findings")
-    if not isinstance(findings, list):
-        return
-    neighbours = [
-        f
-        for f in findings
-        if isinstance(f, dict) and f.get("check") == "duplicated-neighbour"
-    ]
-    if not neighbours:
-        return
 
-    rows = []
-    for f in neighbours[:8]:
-        keys = f.get("keys")
-        rows.append(" and ".join(keys) if isinstance(keys, list) else "?")
-    shown = "; ".join(rows)
-    if len(neighbours) > 8:
-        shown += f"; and {len(neighbours) - 8} more"
-    report.warn(
-        rel_path,
-        f"{len(neighbours)} cell(s) send a neighbour's code: {shown}. "
-        "The device answers and looks like it worked while setting the "
-        "wrong state, and a dimension checklist does not sample these, "
-        "so no fitting can catch it",
-    )
+def _report_receipt_drift(
+    rel_path: str, stored: dict | None, suspects: int, report: Report
+) -> None:
+    """What the file SAID, against what combing it says now.
 
-    truncated = comb.get("truncated")
-    if isinstance(truncated, int) and truncated > 0:
+    A disagreement is its own finding. It means the receipt travelled
+    without the codes it describes, or somebody edited one of the two.
+    Either way the receipt is not evidence about this file.
+    """
+    if stored is None:
         report.warn(
             rel_path,
-            f"the comb receipt lists 200 findings and omits {truncated} "
-            "more; the counts above describe the full result",
+            "no comb receipt in this file. The shop combed it here "
+            "instead, so the findings above stand, but nothing travels "
+            "with the file: import it into HAIR and share it again and "
+            "the receipt rides along for everyone downstream",
+        )
+        return
+
+    claimed = stored.get("suspects")
+    if not isinstance(claimed, int) or claimed == suspects:
+        return
+
+    # A receipt written by an older comb is not a lie, it is an older
+    # opinion: the checks that found these had not been written when it
+    # was stamped. Telling the two apart matters, because one is
+    # housekeeping and the other is a file whose paperwork does not
+    # describe its own codes.
+    version = stored.get("version")
+    if isinstance(version, int) and version < RECEIPT_VERSION:
+        report.note(
+            rel_path,
+            f"the receipt in this file is version {version} and claims "
+            f"{claimed} suspect(s); combing it with the pinned HAIR "
+            f"finds {suspects}. The receipt is not wrong, it is older "
+            "than the checks that caught these. Re-comb in HAIR and the "
+            "file will carry the newer answer",
+        )
+        return
+
+    report.warn(
+        rel_path,
+        f"the comb receipt in this file claims {claimed} suspect(s); "
+        f"combing it here finds {suspects}, and the receipt is current "
+        "enough to have known. It describes a version of these codes "
+        "that is not the version in this file, so it is being ignored "
+        "and the findings below were derived fresh",
+    )
+
+
+def _report_coverage(
+    rel_path: str, wig, receipt: dict, report: Report
+) -> None:
+    """Say what was NOT checked, where that silence is load-bearing.
+
+    Only on a matrix. On a flat remote the check that matters is frame
+    self-consistency, and that runs on anything without needing a map,
+    so a missing field map costs a flat wig nothing worth a line.
+
+    On a lattice it costs everything. A dimension checklist samples
+    fourteen cells out of hundreds, and where no map covers the protocol
+    the field check cannot run either, which leaves the rest of the
+    lattice attested by nobody and examined by nothing. That is exactly
+    what fifty-two bad cells looked like before the pin, so an unchecked
+    lattice must not read like a clean one.
+    """
+    if wig.climate is None:
+        return
+
+    coverage = receipt.get("coverage")
+    if not isinstance(coverage, dict):
+        return
+
+    protocol = coverage.get("protocol")
+    if isinstance(protocol, dict):
+        codes = protocol.get("codes") or 0
+        if protocol.get("id") is None:
+            report.warn(
+                rel_path,
+                f"no field map covers this lattice's protocol, so none "
+                f"of its {codes} cell(s) were read against their labels. "
+                "The fitting attests fourteen or so of them and nothing "
+                "has looked at the rest. Unchecked is not the same as "
+                "clean",
+            )
+        else:
+            readable = protocol.get("readable") or 0
+            report.note(
+                rel_path,
+                f"protocol read as {protocol['id']}: {readable} of "
+                f"{codes} cell(s) decoded",
+            )
+
+    fields = coverage.get("fields")
+    if isinstance(fields, dict):
+        unchecked = sorted(
+            name
+            for name, block in fields.items()
+            if isinstance(block, dict) and not block.get("checked")
+        )
+        if unchecked:
+            report.note(
+                rel_path,
+                "field(s) this lattice was not judged on: "
+                + ", ".join(unchecked)
+                + ". A field the map does not yet ratify is left alone "
+                "rather than guessed at",
+            )
+
+
+def _report_findings(rel_path: str, findings, report: Report) -> None:
+    """The findings themselves, grouped so a lattice does not flood."""
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for finding in findings.findings:
+        for key in finding.keys:
+            grouped[finding.check].append(key)
+
+    for check, keys in sorted(grouped.items()):
+        shown = ", ".join(sorted(keys)[:8])
+        if len(keys) > 8:
+            shown += f"; and {len(keys) - 8} more"
+        report.note(rel_path, f"{check}: {shown}")
+
+    # The one class worth naming on its own. A malformed frame is
+    # ignored by the device, which is annoying but obvious. A code that
+    # says something other than its label makes the device answer and
+    # look like it worked while landing on the wrong state, so nobody
+    # notices until they wonder why the room is a degree off.
+    dangerous = [
+        f
+        for f in findings.findings
+        if f.check in ("duplicated-neighbour", "field-mismatch")
+    ]
+    if dangerous:
+        report.warn(
+            rel_path,
+            f"{len(dangerous)} code(s) answer the device and land on the "
+            "wrong state. A dimension checklist does not sample these, "
+            "so no fitting could have caught them and the fitter is not "
+            "at fault. HAIR 0.14.0 can repair them on the device",
         )
 
 
@@ -883,7 +1039,7 @@ def check_wig(
 
     check_claims(rel_path, wig, mods, report)
 
-    check_comb(rel_path, wig, report)
+    check_comb(rel_path, wig, mods, report)
 
     # Orphaned claims are kept on purpose: they are somebody's signed
     # statement about bytes that were once here, and deleting them
