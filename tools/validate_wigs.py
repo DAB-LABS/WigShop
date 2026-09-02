@@ -803,7 +803,7 @@ def live_comb(wig, mods):
     return wcomb.comb_wig(wig)
 
 
-def check_comb(rel_path: str, wig, mods, report: Report) -> None:
+def check_comb(rel_path: str, wig, mods, report: Report):
     """Comb the wig and say what came out.
 
     A fitting attests the dimension checklist, which on a matrix wig is
@@ -831,7 +831,7 @@ def check_comb(rel_path: str, wig, mods, report: Report) -> None:
                 "no comb receipt, and the pinned HAIR cannot comb. "
                 "Nothing has checked this wig's codes against each other",
             )
-        return
+        return None
 
     receipt = findings.to_receipt(_today())
     suspects = receipt.get("suspects") or 0
@@ -841,7 +841,7 @@ def check_comb(rel_path: str, wig, mods, report: Report) -> None:
     _report_coverage(rel_path, wig, receipt, report)
 
     if suspects == 0:
-        return
+        return findings
 
     detail = "; ".join(f"{k}: {v}" for k, v in sorted(counts.items()))
     report.warn(
@@ -851,6 +851,7 @@ def check_comb(rel_path: str, wig, mods, report: Report) -> None:
         + ". Worth reading before merging",
     )
     _report_findings(rel_path, findings, report)
+    return findings
 
 
 def _report_receipt_drift(
@@ -996,6 +997,188 @@ def _report_findings(rel_path: str, findings, report: Report) -> None:
         )
 
 
+#: Where HAIR writes a repair record, inside the cell's or signal's own
+#: unknown-keys bag so it rides the file with no format change.
+REPAIR_KEY = "hair_repair"
+
+#: How honest a repaired code is about the room it was proved in.
+#: ``air-tested`` means somebody fired this code at the device.
+#: ``rule-derived`` means it was written under a ratified field rule
+#: whose sample WAS fired, and the record names the cells that were.
+#: ``accepted`` means a person said yes to the bytes and nothing was
+#: transmitted at all.
+TIER_AIR_TESTED = "air-tested"
+TIER_RULE_DERIVED = "rule-derived"
+TIER_ACCEPTED = "accepted"
+
+
+def repair_records(wig, mods) -> list[tuple[str, dict]]:
+    """Every repair record in this wig, paired with what it repaired.
+
+    A repaired wig is a file HAIR mints beside the original once
+    somebody works the Needs attention list, and it is a shape the shop
+    had never seen before 0.14.0. The records ride in cell and signal
+    extras by the unknown-keys contract, so an older shop reads straight
+    past them, which is exactly why they have to be read here on purpose.
+    """
+    found: list[tuple[str, dict]] = []
+
+    for signal in wig.signals or []:
+        record = (signal.extra or {}).get(REPAIR_KEY)
+        if isinstance(record, dict):
+            found.append((signal.alias, record))
+
+    if wig.climate is not None:
+        # HAIR's own key function, not a reimplementation of it. A cell
+        # coordinate built here would read "cool/auto/16.0" against the
+        # comb's "cool/auto/16", because temp is a float, and the
+        # cross-check below would silently match nothing forever.
+        cell_key = mods["wig_format"].cell_key
+        for cell in wig.climate.cells:
+            record = (cell.extra or {}).get(REPAIR_KEY)
+            if isinstance(record, dict):
+                found.append((cell_key(cell), record))
+
+    return found
+
+
+def check_repairs(rel_path: str, wig, mods, combed, report: Report) -> None:
+    """Say what this file CLAIMS was mended, and check the claim.
+
+    Ruled by the owner 2026-09-02: **accept and report.** A repair is
+    not held to a standard the shelf has never applied to anything else.
+    A lattice already carries hundreds of cells nobody pressed, because
+    that is what a dimension checklist is, and a repair run proves a
+    sample on air and names it. Refusing the second while accepting the
+    first would be inconsistent rather than careful.
+
+    But note the word CLAIMS. ``canonical_cells_json`` builds the
+    matrix hash from mode, fan, swing, temp and pronto only, so cell
+    extras are outside it on purpose -- two files differing by nothing
+    but annotations must hash alike or fittings would stop
+    accumulating. The consequence is that **a repair record is covered
+    by no signature at all.** It can be stamped onto any wig, or
+    stripped off one, and every gate here still passes.
+
+    So this reads exactly like the comb receipt does: as the file's own
+    word about itself, never as evidence. What the shop CAN do is hold
+    the claim against the codes, because a wig that says it mended
+    fifty-two cells and still combs to fifty-two mended nothing.
+    """
+    records = repair_records(wig, mods)
+    if not records:
+        return
+
+    tiers: dict[str, int] = defaultdict(int)
+    runs: set[str] = set()
+    overridden: list[str] = []
+    proved_on_air: set[str] = set()
+    claimed_keys: set[str] = set()
+
+    for key, record in records:
+        claimed_keys.add(key)
+        tiers[str(record.get("tier") or "unstated")] += 1
+        run = record.get("run")
+        if isinstance(run, str):
+            runs.add(run)
+        if record.get("reading_disagreed"):
+            overridden.append(key)
+        for cell in record.get("tested_cells") or []:
+            if isinstance(cell, str):
+                proved_on_air.add(cell)
+
+    spread = ", ".join(f"{n} {tier}" for tier, n in sorted(tiers.items()))
+    in_runs = f" across {len(runs)} repair run(s)" if runs else ""
+    report.note(
+        rel_path,
+        f"this file states that {len(records)} of its code(s) were "
+        f"repaired in HAIR{in_runs}: {spread}. Repair records ride "
+        "outside the matrix hash, so nothing signs them and they are "
+        "the file's word rather than proof",
+    )
+
+    _check_repairs_took(rel_path, claimed_keys, combed, report)
+
+    if proved_on_air:
+        shown = ", ".join(sorted(proved_on_air)[:6])
+        if len(proved_on_air) > 6:
+            shown += f"; and {len(proved_on_air) - 6} more"
+        report.note(
+            rel_path,
+            f"the rule-derived records name {len(proved_on_air)} cell(s) "
+            f"as proved on air behind them: {shown}",
+        )
+
+    unstated = tiers.get("unstated", 0)
+    if unstated:
+        report.warn(
+            rel_path,
+            f"{unstated} repair record(s) carry no tier, so they do not "
+            "even claim whether anything was transmitted. HAIR writes a "
+            "tier on every repair it makes, so these came from "
+            "somewhere else",
+        )
+
+    if tiers.get(TIER_ACCEPTED):
+        report.note(
+            rel_path,
+            f"{tiers[TIER_ACCEPTED]} of these are accepted without a "
+            "send: the one-at-a-time path, where a person read the "
+            "bytes and said yes and nothing was fired at the device",
+        )
+
+    # A human who overrode the reading is the most interesting line in
+    # the file. It is allowed on purpose -- a remote sends what its
+    # display shows, so a consistent mismatch is evidence about OUR
+    # field map rather than about the person pressing the button -- and
+    # repeated overrides in one protocol family are how a provisional
+    # field eventually gets ratified. That only works if somebody reads
+    # them, so they are surfaced rather than counted.
+    if overridden:
+        shown = ", ".join(sorted(overridden)[:6])
+        if len(overridden) > 6:
+            shown += f"; and {len(overridden) - 6} more"
+        report.note(
+            rel_path,
+            f"{len(overridden)} repair(s) were kept after HAIR read them "
+            f"as something other than their label: {shown}. Worth "
+            "reading: this is how a field map learns it is wrong",
+        )
+
+
+def _check_repairs_took(
+    rel_path: str, claimed: set[str], combed, report: Report
+) -> None:
+    """Hold the claim against the codes.
+
+    The one thing about a repair the shop can check without trusting
+    anybody: a cell somebody says they mended should no longer be the
+    cell combing complains about. Where it still is, the record is
+    decoration, whether it was written in good faith or not.
+    """
+    if combed is None or not claimed:
+        return
+
+    still_flagged = {
+        key
+        for finding in combed.findings
+        for key in finding.keys
+        if key in claimed
+    }
+    if not still_flagged:
+        return
+
+    shown = ", ".join(sorted(still_flagged)[:6])
+    if len(still_flagged) > 6:
+        shown += f"; and {len(still_flagged) - 6} more"
+    report.warn(
+        rel_path,
+        f"{len(still_flagged)} code(s) carry a repair record and are "
+        f"still flagged by combing: {shown}. Whatever those records "
+        "say was done, the codes did not change",
+    )
+
+
 def check_wig(
     rel_path: str,
     text: str,
@@ -1039,7 +1222,9 @@ def check_wig(
 
     check_claims(rel_path, wig, mods, report)
 
-    check_comb(rel_path, wig, mods, report)
+    combed = check_comb(rel_path, wig, mods, report)
+
+    check_repairs(rel_path, wig, mods, combed, report)
 
     # Orphaned claims are kept on purpose: they are somebody's signed
     # statement about bytes that were once here, and deleting them

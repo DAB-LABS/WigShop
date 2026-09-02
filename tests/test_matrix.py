@@ -16,6 +16,7 @@ from conftest import (
     has,
     make_matrix_wig,
     make_wig,
+    repair_cells,
 )
 
 PATH = "wigs/bench/bench-ac-a-1.wig.json"
@@ -261,3 +262,160 @@ def test_a_flat_wig_is_not_nagged_about_field_maps(shop, mods, david):
     assert report.ok, report.failures
     assert not has(report.warnings, "field map", flat)
     assert not has(report.notes, "field map", flat)
+
+
+# ---------------------------------------------------------------------------
+# Repaired wigs: accept and report (owner ruling 2026-09-02)
+# ---------------------------------------------------------------------------
+
+REPAIRED = [("cool", "auto", 20), ("cool", "auto", 24)]
+
+
+def test_a_repaired_wig_says_it_was_repaired(shop, mods, david):
+    """A mended lattice and a captured one are not the same object.
+
+    The reader cannot tell them apart from the outside, and only the
+    file knows, so the shop says which one it is holding.
+    """
+    wig = repair_cells(
+        make_matrix_wig(WIG_ID), REPAIRED,
+        tested=["cool/auto/16", "heat/auto/30"],
+    )
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "were repaired in HAIR", PATH)
+    assert has(report.notes, "2 rule-derived", PATH)
+    assert has(report.notes, "the file's word rather than proof", PATH)
+    assert has(report.notes, "proved on air behind them", PATH)
+
+
+def test_a_repair_does_not_cost_a_wig_the_gate(shop, mods, david):
+    """Ruled: accept and report.
+
+    The lattice already carries cells nobody pressed, because that is
+    what a dimension checklist is. A repair run proves a sample on air
+    and names it. Refusing the second while accepting the first would
+    be inconsistent rather than careful.
+    """
+    wig = repair_cells(make_matrix_wig(WIG_ID), REPAIRED)
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert not has(report.warnings, "repair", PATH)
+
+
+def test_an_accepted_repair_is_named_as_untransmitted(shop, mods, david):
+    """The one-at-a-time path fires nothing, and that is worth saying."""
+    wig = repair_cells(make_matrix_wig(WIG_ID), REPAIRED, tier="accepted")
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "accepted without a send", PATH)
+
+
+def test_a_repair_with_no_tier_is_a_warning(shop, mods, david):
+    """HAIR writes a tier on everything it mends.
+
+    A record without one did not come from Detangle, so there is no
+    saying whether anything was ever transmitted for it. That is the
+    only repair shape the shop distrusts.
+    """
+    wig = make_matrix_wig(WIG_ID)
+    repair_cells(wig, REPAIRED)
+    for cell in wig["climate"]["cells"]:
+        if "hair_repair" in cell:
+            del cell["hair_repair"]["tier"]
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.warnings, "carry no tier", PATH)
+
+
+def test_an_overridden_reading_is_surfaced_not_buried(shop, mods, david):
+    """Somebody kept bytes HAIR read as something else.
+
+    Allowed on purpose: a remote sends what its display shows, so a
+    consistent mismatch is evidence about the field map rather than
+    about the person pressing the button. Repeated overrides are how a
+    provisional field gets ratified, which only works if a human reads
+    them.
+    """
+    wig = repair_cells(make_matrix_wig(WIG_ID), REPAIRED, disagreed=True)
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "read them as something other", PATH)
+    assert has(report.notes, "how a field map learns it is wrong", PATH)
+
+
+def test_a_repair_trail_is_unsigned_and_the_shop_says_so(
+    shop, mods, david
+):
+    """Nothing signs a repair record, so it is reported as a claim.
+
+    ``canonical_cells_json`` builds the matrix hash from mode, fan,
+    swing, temp and pronto only. Cell extras sit outside it on purpose,
+    because two files differing by nothing but annotations have to hash
+    alike or fittings would stop accumulating on one wig.
+
+    The cost is that a repair trail can be stamped onto a finished,
+    signed wig without disturbing anything: the cells_hash still
+    matches, the signature still verifies, every gate still passes.
+    That is worth pinning, because a repair record is a claim about
+    human effort and this repo exists to make exactly those
+    trustworthy.
+
+    So the shop reports it the way it reports the comb receipt: as what
+    the file says about itself.
+    """
+    wig = attest_matrix(mods, make_matrix_wig(WIG_ID), david)
+    repair_cells(wig, REPAIRED)
+    shop.put(PATH, wig)
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "the file's word rather than proof", PATH)
+
+
+def test_a_repair_that_did_not_take_is_called_out(shop, mods, david):
+    """The one thing about a repair the shop can check on its own.
+
+    A cell somebody says they mended should stop being the cell combing
+    complains about. Where it still is, the record is decoration,
+    whether it was written in good faith or not.
+    """
+    wig = make_matrix_wig(WIG_ID)
+    cells = wig["climate"]["cells"]
+    # Two cells in one row end up sending the same code: a partial
+    # collapse, which is the defect a whole flat row is not.
+    cells[1]["pronto"] = cells[0]["pronto"]
+    claimed = [(cells[1]["mode"], cells[1].get("fan"), cells[1].get("temp"))]
+    repair_cells(wig, claimed)
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.warnings, "still flagged by combing", PATH)
+    assert has(report.warnings, "the codes did not change", PATH)
+
+
+def test_a_repair_that_took_is_not_accused(shop, mods, david):
+    """The same check, the other way round, so it cannot pass vacuously.
+
+    A wig whose repaired coordinates are clean gets the claim reported
+    and nothing else. Without this, a cross-check that matched no keys
+    at all would look identical to one that worked.
+    """
+    wig = repair_cells(make_matrix_wig(WIG_ID), REPAIRED)
+    shop.put(PATH, attest_matrix(mods, wig, david))
+    report = shop.validate()
+
+    assert report.ok, report.failures
+    assert has(report.notes, "were repaired in HAIR", PATH)
+    assert not has(report.warnings, "still flagged by combing", PATH)
