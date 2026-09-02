@@ -69,6 +69,40 @@ TIER_SUFFIXES = ("-perfect-fit", "-fitted")
 
 
 @dataclass
+class Entry:
+    """One thing the shop found, as a fact rather than as a sentence.
+
+    ``code`` is a permanent name for the KIND of finding, and the whole
+    point of it is that it never changes: it is what gets counted over
+    months and what a reviewing agent's tests point at. Rewording
+    ``text`` is free; renaming a code is not.
+
+    Codes arrive as they earn their keep. A finding with no code yet
+    still lands here carrying its level and its sentence, which is
+    enough to render and enough to read, and is a great deal better
+    than inventing sixty-five names for messages nothing consumes.
+    """
+
+    path: str
+    level: str
+    text: str
+    code: str | None = None
+    params: dict = field(default_factory=dict)
+    keys: list = field(default_factory=list)
+
+    def as_dict(self) -> dict:
+        out = {"level": self.level, "text": self.text}
+        if self.code:
+            out["code"] = self.code
+        if self.params:
+            out["params"] = self.params
+        if self.keys:
+            out["keys"] = self.keys
+            out["count"] = len(self.keys)
+        return out
+
+
+@dataclass
 class Report:
     """Everything one run found, grouped by the file it came from.
 
@@ -89,16 +123,34 @@ class Report:
     notes: dict[str, list[str]] = field(
         default_factory=lambda: defaultdict(list)
     )
+    #: The same findings again, with whatever structure each one has.
+    #: The three buckets above stay exactly as they were, because
+    #: everything that reads a Report today reads sentences out of them
+    #: and there is no reason to make that churn.
+    entries: list[Entry] = field(default_factory=list)
     checked: int = 0
 
-    def fail(self, path: str, message: str) -> None:
-        self.failures[path].append(message)
+    def _add(self, level, bucket, path, message, code, params, keys):
+        bucket[path].append(message)
+        self.entries.append(
+            Entry(
+                path=path,
+                level=level,
+                text=message,
+                code=code,
+                params=dict(params) if params else {},
+                keys=list(keys) if keys else [],
+            )
+        )
 
-    def warn(self, path: str, message: str) -> None:
-        self.warnings[path].append(message)
+    def fail(self, path, message, *, code=None, params=None, keys=None):
+        self._add("fail", self.failures, path, message, code, params, keys)
 
-    def note(self, path: str, message: str) -> None:
-        self.notes[path].append(message)
+    def warn(self, path, message, *, code=None, params=None, keys=None):
+        self._add("warn", self.warnings, path, message, code, params, keys)
+
+    def note(self, path, message, *, code=None, params=None, keys=None):
+        self._add("note", self.notes, path, message, code, params, keys)
 
     @property
     def ok(self) -> bool:
@@ -849,6 +901,8 @@ def check_comb(rel_path: str, wig, mods, report: Report):
         f"combing found {suspects} suspect(s)"
         + (f" ({detail})" if detail else "")
         + ". Worth reading before merging",
+        code="comb.suspects",
+        params={"suspects": suspects, "counts": dict(counts)},
     )
     _report_findings(rel_path, findings, report)
     return findings
@@ -891,6 +945,9 @@ def _report_receipt_drift(
             f"finds {suspects}. The receipt is not wrong, it is older "
             "than the checks that caught these. Re-comb in HAIR and the "
             "file will carry the newer answer",
+            code="comb.receipt-stale",
+            params={"version": version, "claimed": claimed,
+                    "found": suspects},
         )
         return
 
@@ -901,6 +958,8 @@ def _report_receipt_drift(
         "enough to have known. It describes a version of these codes "
         "that is not the version in this file, so it is being ignored "
         "and the findings below were derived fresh",
+        code="comb.receipt-disagrees",
+        params={"claimed": claimed, "found": suspects},
     )
 
 
@@ -938,6 +997,8 @@ def _report_coverage(
                 "The fitting attests fourteen or so of them and nothing "
                 "has looked at the rest. Unchecked is not the same as "
                 "clean",
+                code="comb.protocol-unmapped",
+                params={"cells": codes},
             )
         else:
             readable = protocol.get("readable") or 0
@@ -945,6 +1006,9 @@ def _report_coverage(
                 rel_path,
                 f"protocol read as {protocol['id']}: {readable} of "
                 f"{codes} cell(s) decoded",
+                code="comb.protocol-read",
+                params={"protocol": protocol["id"], "readable": readable,
+                        "cells": codes},
             )
 
     fields = coverage.get("fields")
@@ -961,6 +1025,8 @@ def _report_coverage(
                 + ", ".join(unchecked)
                 + ". A field the map does not yet ratify is left alone "
                 "rather than guessed at",
+                code="comb.fields-unjudged",
+                keys=unchecked,
             )
 
 
@@ -994,6 +1060,8 @@ def _report_findings(rel_path: str, findings, report: Report) -> None:
             "wrong state. A dimension checklist does not sample these, "
             "so no fitting could have caught them and the fitter is not "
             "at fault. HAIR 0.14.0 can repair them on the device",
+            code="comb.wrong-state",
+            keys=sorted({k for f in dangerous for k in f.keys}),
         )
 
 
@@ -1095,6 +1163,9 @@ def check_repairs(rel_path: str, wig, mods, combed, report: Report) -> None:
         f"repaired in HAIR{in_runs}: {spread}. Repair records ride "
         "outside the matrix hash, so nothing signs them and they are "
         "the file's word rather than proof",
+        code="repair.claimed",
+        params={"records": len(records), "tiers": dict(tiers),
+                "runs": len(runs)},
     )
 
     _check_repairs_took(rel_path, claimed_keys, combed, report)
@@ -1117,6 +1188,8 @@ def check_repairs(rel_path: str, wig, mods, combed, report: Report) -> None:
             "even claim whether anything was transmitted. HAIR writes a "
             "tier on every repair it makes, so these came from "
             "somewhere else",
+            code="repair.untiered",
+            params={"records": unstated},
         )
 
     if tiers.get(TIER_ACCEPTED):
@@ -1176,6 +1249,8 @@ def _check_repairs_took(
         f"{len(still_flagged)} code(s) carry a repair record and are "
         f"still flagged by combing: {shown}. Whatever those records "
         "say was done, the codes did not change",
+        code="repair.did-not-take",
+        keys=sorted(still_flagged),
     )
 
 
@@ -1923,43 +1998,16 @@ def main(argv: list[str] | None = None) -> int:
 
     root = Path(args.root).resolve()
     mods = load_hair(args.hair_src)
-    report = Report()
 
     targets = args.files or discover(root)
     if not targets and not args.base_ref:
         print("No wigs to check yet.")
         return 0
 
-    hashes: dict[str, list[str]] = defaultdict(list)
-
-    for rel_path in targets:
-        rel_path = Path(rel_path).as_posix()
-        full = root / rel_path
-        if not full.exists():
-            # A deletion in the diff. The ancestry walk accounts for it.
-            continue
-        if not rel_path.endswith(WIG_SUFFIX):
-            continue
-
-        report.checked += 1
-        text = full.read_text(encoding="utf-8")
-
-        brand_folder = check_path_shape(rel_path, report)
-        checked = check_wig(rel_path, text, brand_folder, mods, report)
-        if checked is not None:
-            _, content_hash = checked
-            hashes[content_hash].append(rel_path)
-
-        if args.base_ref:
-            check_against_base(rel_path, text, args.base_ref, mods, report)
-
-    check_shelf(root, args.base_ref, mods, report)
-
-    submitted = (
-        {Path(f).as_posix() for f in args.files} if args.files else None
+    report = run_checks(
+        root, targets, args.base_ref, mods,
+        submitted=bool(args.files),
     )
-    check_duplicates(root, hashes, submitted, mods, report)
-
     return emit(report)
 
 
@@ -2012,6 +2060,53 @@ def check_duplicates(
                 "it, drop it on the Closet, fit it, and open the PR "
                 "replacing that file",
             )
+
+
+def run_checks(
+    root: Path,
+    targets: list[str],
+    base_ref: str | None,
+    mods,
+    *,
+    submitted: bool = False,
+) -> Report:
+    """Every check, over these wigs, into one Report.
+
+    Lifted out of ``main`` so the evaluator runs exactly what CI runs.
+    Two code paths that both "validate a wig" would drift, and the day
+    they disagreed the evaluation would describe a check nobody ran.
+    """
+    report = Report()
+    hashes: dict[str, list[str]] = defaultdict(list)
+    paths: list[str] = []
+
+    for rel_path in targets:
+        rel_path = Path(rel_path).as_posix()
+        full = root / rel_path
+        if not full.exists():
+            # A deletion in the diff. The ancestry walk accounts for it.
+            continue
+        if not rel_path.endswith(WIG_SUFFIX):
+            continue
+
+        paths.append(rel_path)
+        report.checked += 1
+        text = full.read_text(encoding="utf-8")
+
+        brand_folder = check_path_shape(rel_path, report)
+        checked = check_wig(rel_path, text, brand_folder, mods, report)
+        if checked is not None:
+            _, content_hash = checked
+            hashes[content_hash].append(rel_path)
+
+        if base_ref:
+            check_against_base(rel_path, text, base_ref, mods, report)
+
+    check_shelf(root, base_ref, mods, report)
+    check_duplicates(
+        root, hashes, set(paths) if submitted else None, mods, report
+    )
+    return report
 
 
 def emit(report: Report) -> int:

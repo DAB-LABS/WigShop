@@ -11,4 +11,5 @@ select = ["E", "F", "I", "B", "UP", "RUF"]
 # Both tools put the repo's own directory on sys.path before importing
 # from it, which is the whole point of the import order there.
 "tools/build_index.py" = ["E402"]
+"tools/evaluate.py" = ["E402"]
 "tests/*" = ["E402"]
