@@ -210,3 +210,27 @@ def test_a_previous_evaluation_is_read_back_out_of_its_own_file(
 def test_a_missing_previous_is_not_an_error(tmp_path):
     """First run of a pull request has nothing to compare against."""
     assert ev.read_previous(tmp_path / "nope.md") is None
+
+
+def test_a_missing_pull_request_number_is_not_an_error():
+    """CI passes this straight through from the event payload.
+
+    On any event that is not a pull request it expands to an empty
+    string, and the first version of this took type=int and killed the
+    build on the push to main immediately after the feature merged. A
+    missing pull request number is a fact about the event, not a fault.
+    """
+    assert ev.pr_number("") is None
+    assert ev.pr_number("   ") is None
+    assert ev.pr_number(None) is None
+    assert ev.pr_number("19") == 19
+
+
+def test_an_evaluation_with_no_pull_request_still_renders(shop, mods, david):
+    shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
+    report = shop.validate(PATH)
+    block = ev.facts(report, [PATH], None, "v0.14.0")
+    text = ev.render(block, report, None)
+
+    assert text.startswith("# Evaluation\n")
+    assert block["pr"] is None
