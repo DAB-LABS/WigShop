@@ -64,6 +64,12 @@ VERDICTS = {
 }
 
 
+def pr_number(value: str) -> int | None:
+    """A pull request number, or None when there is not one."""
+    value = (value or "").strip()
+    return int(value) if value else None
+
+
 def verdict_of(report) -> str:
     """One of three, and the middle one is not decoration.
 
@@ -264,7 +270,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hair-src", required=True)
     parser.add_argument("--base-ref", default=None)
     parser.add_argument("--root", default=".")
-    parser.add_argument("--pr", type=int, default=None)
+    # Tolerant on purpose. In a workflow this arrives as
+    # ${{ github.event.pull_request.number }}, which expands to an
+    # empty string on any event that is not a pull request, and a
+    # missing pull request number is never a reason to fail a build.
+    parser.add_argument("--pr", type=pr_number, default=None)
     parser.add_argument(
         "--previous",
         default=None,
