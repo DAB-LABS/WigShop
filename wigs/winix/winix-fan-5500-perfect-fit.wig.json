@@ -1,0 +1,127 @@
+{
+    "format": "hair-wig/3",
+    "name": "Winix Air Purifier",
+    "wig_id": "b1f8ef4e-6d74-4a5d-b90a-ab4a70d90848",
+    "brand": "WInix",
+    "model": "5500",
+    "kind": "fan",
+    "origin": "device",
+    "signals": [
+        {
+            "alias": "Auto",
+            "pronto": "0000 006D 0022 0000 015B 00AA 0018 0014 0016 0040 0016 0015 0017 0014 0016 0040 0017 0014 0016 0015 0016 0015 0016 0040 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0017 0014 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0017 076D",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Turbo",
+            "pronto": "0000 006D 0022 0000 015B 00AA 0018 0014 0016 0040 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 0015 0016 0040 0016 0015 0017 0014 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 076D",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Speed Down",
+            "pronto": "0000 006D 0022 0000 015B 00AA 0018 0014 0017 003F 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0017 003F 0016 0015 0016 0040 0017 003F 0016 0015 0016 0040 0016 0040 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0016 003F 0017 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 076D",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Speed Up",
+            "pronto": "0000 006D 0022 0000 015C 00AA 0017 0015 0016 0040 0017 0014 0017 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0017 0014 0016 0040 0016 0040 0017 0014 0017 003F 0016 0040 0016 0040 0016 0040 0016 0015 0016 0015 0016 0015 0018 003F 0017 0014 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0018 003F 0017 0014 0016 0040 0016 0040 0017 0040 0016 017C",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Power",
+            "pronto": "0000 006D 0022 0000 015C 00AA 0017 0015 0016 0040 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0040 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 0040 0016 0040 0016 0015 0016 0015 0016 0040 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0040 0016 0040 0016 0015 0016 0040 0016 0040 0016 0040 0016 017C",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        }
+    ],
+    "comb": {
+        "version": 2,
+        "date": "2026-09-14",
+        "suspects": 0,
+        "counts": {},
+        "findings": [],
+        "coverage": {
+            "codes": 5,
+            "checked": 5,
+            "checks": {
+                "frame-shape": {
+                    "checked": 5,
+                    "declined": {}
+                },
+                "frame-disagreement": {
+                    "checked": 0,
+                    "declined": {
+                        "single-frame": 5
+                    }
+                },
+                "duplicated-neighbour": {
+                    "checked": 0,
+                    "declined": {
+                        "no-lattice": 1
+                    }
+                },
+                "field-mismatch": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 5
+                    }
+                },
+                "frame-integrity": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 5
+                    }
+                }
+            },
+            "protocol": {
+                "id": null,
+                "codes": 5,
+                "readable": 0,
+                "declined": {
+                    "protocol-unmapped": 5
+                }
+            }
+        }
+    },
+    "fittings": [
+        {
+            "wig_id": "b1f8ef4e-6d74-4a5d-b90a-ab4a70d90848",
+            "handle": "kenobob",
+            "github": "kenobob",
+            "date": "2026-09-14",
+            "rows": [
+                {
+                    "alias_at_claim": "Auto",
+                    "digest": "34b1b18d39cc4581",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Turbo",
+                    "digest": "f2db4c820dff1c3f",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Speed Down",
+                    "digest": "a9ea7b521dfa46ee",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Speed Up",
+                    "digest": "88b926e877a32ca3",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Power",
+                    "digest": "7f265629249f632a",
+                    "verdict": "worked"
+                }
+            ],
+            "key": "FabO/V2rryFuin9/5W6PlSwxariteKaAFxLD8Qluu50=",
+            "sig": "a+QTZeT91XZMWpIjesSag8KIU+dhqw5i7kVGphdA+5yK957itA8rP6w5RjhjKSU0ysxyaXQaelxAKbnSU6iNDQ=="
+        }
+    ]
+}
