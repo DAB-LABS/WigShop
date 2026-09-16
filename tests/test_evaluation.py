@@ -74,9 +74,21 @@ def test_a_refusal_cannot_be_rounded_up(shop, mods, david):
     A reviewing agent is handed this rather than asked to judge, so
     the value has to be there rather than inferred from whether some
     list happens to be empty.
+
+    The refusal used to come from an empty fittings list, which is an
+    ordinary wig now. A legacy fitting still refuses, and it refuses
+    for a reason that has nothing to do with the gate: a whole-file
+    hash records which bytes were seen and not which rows anybody
+    proved, so converting one would manufacture evidence nobody gave.
     """
     wig = make_wig(WIG_ID)
-    wig["fittings"] = []
+    wig["fittings"] = [
+        {
+            "handle": "Someone",
+            "content_hash": "sha256:" + "0" * 64,
+            "date": "2026-07-01",
+        }
+    ]
     shop.put(PATH, wig)
     block, text = evaluate(shop, [PATH])
 
@@ -117,13 +129,13 @@ def test_findings_with_no_code_still_reach_the_file(shop, mods, david):
     quietly incomplete, which is worse than a finding with no short
     name.
     """
-    wig = make_wig(WIG_ID)
-    wig["fittings"] = []
+    wig = make_wig(WIG_ID, comb=False)
     shop.put(PATH, wig)
     block, _ = evaluate(shop, [PATH])
 
     findings = block["wigs"][0]["findings"]
     assert any("code" not in f for f in findings)
+    assert any(f.get("code") for f in findings)
     assert all(f["text"] for f in findings)
 
 
@@ -144,6 +156,63 @@ def test_only_the_wigs_the_pull_request_touches(shop, mods, david):
 # ---------------------------------------------------------------------------
 # The delta, which is the point of keeping the artifacts
 # ---------------------------------------------------------------------------
+
+
+def test_a_wig_with_no_fitting_is_recorded_not_refused(shop, mods):
+    """The artifact has to be able to tell the two tiers apart.
+
+    A fitted wig and a perfectly fitted one are both accepted, so the
+    verdict cannot carry the difference and something in the file has
+    to. This is the finding a reviewer reads before deciding what to
+    say to a contributor who might go and get a fitting.
+    """
+    shop.put(PATH, make_wig(WIG_ID))
+    block, text = evaluate(shop, [PATH])
+
+    assert block["verdict"] == "accept"
+    assert "**Verdict: accepted.**" in text
+    assert "Refused" not in text
+    assert "**Recorded**" in text
+    assert "no fitting yet" in text
+
+    findings = block["wigs"][0]["findings"]
+    assert any(f.get("code") == "fit.none" for f in findings)
+    assert all(f["level"] == "note" for f in findings)
+
+
+def test_a_perfectly_fitted_wig_records_neither_fit_finding(
+    shop, mods, david
+):
+    """The positive twin, so the test above cannot pass vacuously."""
+    shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
+    block, _ = evaluate(shop, [PATH])
+
+    codes = {
+        f.get("code") for f in block["wigs"][0]["findings"]
+    }
+    assert "fit.none" not in codes
+    assert "fit.short" not in codes
+
+
+def test_the_delta_says_a_shortfall_cleared(shop, mods, david):
+    """The best sentence the delta will ever write, and it comes free.
+
+    Somebody submits a wig nobody has proven whole, goes and proves it,
+    and comes back. The one thing worth telling them is that the thing
+    they went away to do is done.
+    """
+    partial = make_wig(WIG_ID)
+    attest(mods, partial, david, verdicts={"Speed Low": "not_on_device"})
+    shop.put(PATH, partial)
+    before, _ = evaluate(shop, [PATH])
+
+    whole = make_wig(WIG_ID)
+    attest(mods, whole, david)
+    shop.put(PATH, whole)
+    after, _ = evaluate(shop, [PATH])
+
+    lines = "\n".join(ev.since_last_time(before, after))
+    assert "cleared: fit.short" in lines
 
 
 def test_the_delta_names_what_cleared_and_what_is_new():

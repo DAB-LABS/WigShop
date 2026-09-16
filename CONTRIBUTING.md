@@ -1,6 +1,6 @@
 # Contributing to the Wig Shop
 
-Everything here arrives as one file, through a pull request, from somebody who proved it on their own hardware.
+Everything here arrives as one file, through a pull request, from somebody who has the remote in their hand.
 
 If that sentence is already clear, the rest of this page is detail you can skim.
 
@@ -10,21 +10,25 @@ If that sentence is already clear, the rest of this page is detail you can skim.
 
 **HAIR 0.9.5 or newer, and 0.9.7 if you can.** Per-row claims arrived in 0.9.5, so a 0.9.5 or 0.9.6 attestation is perfectly good and will be counted here. What 0.9.7 adds is worth having anyway: it names your download so the file drops straight in without a rename, and it stamps a wig's lineage automatically, which is what a replacement needs. Anything older than 0.9.5 can read and write wigs but cannot attest one under the claims model.
 
-**Real hardware.** The device itself, a blaster to send with, and the willingness to press every button and watch what happens.
+**The remote.** A wig is a description of one real remote, so you need that remote and a way for HAIR to read it.
+
+**Real hardware, if you want a perfect fit.** The device itself, a blaster to send with, and the willingness to press every button and watch what happens. That is worth having and it is no longer the price of admission.
 
 That is the whole barrier. No account here, no build tools, no git beyond opening a pull request.
 
 ---
 
-## Perfect fits only
+## Fitted, and perfectly fitted
 
-**A wig lands here when one person has proven every code in it, on their own hardware, in one attestation.**
+**A wig comes in when it is a wig for a real device.** No proof required, no signature required. If you have the remote and HAIR can read it, it is welcome.
 
-Not "we proved it between us", and not "everything except the Eject button". A file where three people each proved a third is a file nobody has watched work end to end. Holding that line is what lets the front page of this shop say one sentence with no asterisk.
+**A wig is perfectly fitted when one person has proven every code in it, on their own hardware, in one attestation.** Not "we proved it between us", and not "everything except the Eject button". A file where three people each proved a third is a file nobody has watched work end to end. Holding that line is what lets the shop say what perfectly fitted means with no asterisk.
 
-So there is nothing to send but a perfect fit. If you could not make every button work, the wig is not ready.
+Two words, and there is no third. If you could not make every button work, send the wig anyway. The shop will record how much of it anybody has proven, and somebody who owns the device can finish it. A wig nobody has proven is worth a great deal more than an empty shelf, and the person best placed to prove it is rarely the person who found the codes.
 
-**It is king of the hill.** One wig per device sits on the shelf, and it stays there until something better takes its place. If you think yours is the better description of that device, prove all of it and send it up. If it is not better, the one already there wins, and the best thing you can do is add your name to it.
+**It is king of the hill.** One wig per device sits on the shelf, and it stays there until something better takes its place. If you think yours is the better description of that device, send it up. If it is not better, the one already there wins, and the best thing you can do is add your name to it.
+
+**Replacing a proven wig takes a proven wig.** Because the shelf holds one per device, a successor takes the place of the wig it names rather than sitting beside it, so a replacement with no perfect fit for a wig that has one is refused. It is the only place a perfect fit is still required, and it is the one rule here that exists to stop the shelf getting worse rather than larger.
 
 **One exception, and it is about hardware rather than effort.** If your unit is genuinely a different model, missing buttons the shop wig carries, do not trim the shared file to fit it. Submit your revision as its own wig, named for what it is, with the product identifiers that tell it apart. A smaller wig that wholly works beats a bigger one that mostly does.
 
@@ -50,12 +54,11 @@ Put your GitHub handle in. On a signed fitting nothing counts it -- the shop cou
 
 ## Contributing a wig nobody has posted yet
 
-1. Fit it until every row is proven. The download filename will say `-perfect-fit` when it is ready.
-2. In the Closet, download the wig.
-3. Open a pull request adding it at `wigs/<brand>/<the filename HAIR gave you>`.
-4. Tick the declaration in the pull request template.
+1. In the Closet, download the wig. If you fitted it until every row is proven, the filename will say `-perfect-fit`.
+2. Open a pull request adding it at `wigs/<brand>/<the filename HAIR gave you>`.
+3. Tick the declaration in the pull request template.
 
-**You should not need to rename anything.** Since 0.9.7 HAIR composes the download name from the wig's own fields, `<brand>-<kind>-<model>-perfect-fit.wig.json`, which is exactly the shape this repo files under. If it does need a rename, something is off; say so in the pull request and we will look at it rather than making you fight the name.
+**You should not need to rename anything.** Since 0.9.7 HAIR composes the download name from the wig's own fields, `<brand>-<kind>-<model>.wig.json`, with `-perfect-fit` on the end when the wig is one, which is exactly the shape this repo files under. If it does need a rename, something is off; say so in the pull request and we will look at it rather than making you fight the name.
 
 The shop never reads the tier from a filename. It runs the claims. A name that could promote a file by being edited would defeat the point of signed per-row claims, so `-perfect-fit` is a courtesy to you at the moment of download and nothing more.
 
@@ -144,18 +147,18 @@ Lowercase is not a style preference. macOS treats `TH-05` and `th-05` as one fil
 So you know before you open the pull request:
 
 - The file parses, using HAIR's own validator. Failures come back naming the specific field.
-- At least one fitting claims every row of the wig worked. This is the gate.
-- Every fitting's signature verifies, and every fitting names this wig. An unsigned fitting passes, with a warning.
+- How much of the wig anybody has proven. A wig with no fitting comes in and is recorded as having none. A wig whose claims fall short comes in with the count. Neither is a refusal.
+- Every fitting's signature verifies, and every fitting names this wig. An unsigned fitting passes. It is recorded as self-reported, and it is a warning only when it claims the whole wig, because that is where the signature is what makes the name mean something.
 - No two fittings share a signing key, since one install has one current word.
 - No fitting that is already here has gone missing.
-- On a wig that replaces one already here, the check reports what changed: rows added, rows repaired, rows removed, and whose claims each of those retires. Lineage the shop cannot trace, or lineage naming a wig other than the one being replaced, is a warning for a maintainer to read rather than a refusal.
+- On a wig that replaces one already here, the check reports what changed: rows added, rows repaired, rows removed, and whose claims each of those retires. It refuses a replacement that has no perfect fit of its own when the wig it replaces has one. Lineage the shop cannot trace, or lineage naming a wig other than the one being replaced, is a warning for a maintainer to read rather than a refusal.
 - Nothing else in the repo already has these exact codes, and no two files share one wig identity.
 - The filename, the brand folder, and the `unbranded/` identifier rule.
 - What combing found, if anyone combed the wig.
 
 None of this is new logic invented for the shop. [`validate.yml`](.github/workflows/validate.yml) checks out HAIR at a pinned release and runs the same parser your own install runs on import, so a wig that passes here is a wig that loads there. The format itself is documented in [HAIR's wig format contract](https://github.com/DAB-LABS/HAIR/blob/main/docs/wig-format.md), which is everything you need if you are writing a tool that emits wigs.
 
-A good deal comes back as a warning rather than a failure, because it needs a person to look rather than a rule to fire: an unsigned fitting, a brand field that disagrees with its folder, a missing `kind`, claims about rows the wig no longer carries, lineage the shop cannot trace, rows leaving a wig that carried somebody else's proof, and a wig that is perfectly fitted while its comb receipt still lists suspects. That last one is worth opening: both can be true, but a signature does not make an odd-looking code normal.
+A good deal comes back as a warning rather than a failure, because it needs a person to look rather than a rule to fire: an unsigned fitting that claims the whole wig, a brand field that disagrees with its folder, a missing `kind`, claims about rows the wig no longer carries, lineage the shop cannot trace, rows leaving a wig that carried somebody else's proof, and a wig that is perfectly fitted while its comb receipt still lists suspects. That last one is worth opening: both can be true, but a signature does not make an odd-looking code normal.
 
 ---
 
@@ -171,11 +174,11 @@ Two things, and it takes about two minutes:
 
 ## What will be turned away
 
-**A wig no single person has proven whole.** This is the rule. There is no exception for codes you are confident about, and none for a wig three people have proven between them.
+**A replacement with no perfect fit, for a wig that has one.** The shelf holds one wig per device, so this does not put an unproven file beside a proven one, it puts it in its place. Fit your wig and send it again. If the wig on the shelf is wrong and you can correct it but cannot prove the correction on hardware you do not have, say so in the pull request. A maintainer can merge past the refusal, and a decision to trade proof for a correction belongs with them rather than with you.
 
 **Edited codes submitted over a shop wig.** Not because repair is unwelcome; it is a designed path. But a changed description is a new wig, so it arrives as a replacement with its lineage, not as an edit in place. See [above](#when-the-wig-is-wrong-or-your-device-outgrew-it).
 
-**Rows trimmed out of a shared wig to reach a perfect fit.** If your unit does not have those buttons, submit your revision as its own wig. Deleting rows other people proved, to get your own file green, is the one move this gate could tempt somebody into, and the checks refuse it by name. Withdrawing a row you proved yourself is different and passes with a note, because that is your own word to change. If a code really is dead and everyone agrees, say so in the pull request and a maintainer can merge past the refusal.
+**Rows trimmed out of a shared wig.** If your unit does not have those buttons, submit your revision as its own wig. Deleting rows other people proved is refused by name. The temptation used to be mechanical: under the old entry rule, trimming the rows you could not prove was how you reached a perfect fit and got in at all. That pressure is gone, because the wig comes in either way. The rule stays, because deleting somebody else's signed work is not the submitter's to do whatever the motive. Withdrawing a row you proved yourself is different and passes with a note, because that is your own word to change. If a code really is dead and everyone agrees, say so in the pull request and a maintainer can merge past the refusal.
 
 **A pre-0.9.5 fitting.** The old whole-file model recorded that some bytes were proved, not which rows, so there is no honest way to turn one into per-row claims. Import the wig into current HAIR and fit it again. It takes a few minutes; a fabricated claim lasts forever.
 

@@ -13,6 +13,7 @@ from conftest import (
     attest,
     attest_matrix,
     checklist_of,
+    codes,
     has,
     make_matrix_wig,
     make_wig,
@@ -63,13 +64,18 @@ def test_hair_now_refuses_a_one_row_bundle(mods):
     assert wfit.bundle_is_complete(bundle, parsed) is False
 
 
-def test_the_shop_refuses_a_one_row_bundle(shop, mods, david):
-    """Silence is not a claim."""
+def test_a_one_row_bundle_comes_in_with_its_shortfall(shop, mods, david):
+    """Silence is still not a claim; it is no longer a refusal.
+
+    The sibling test_hair_now_refuses_a_one_row_bundle is about HAIR's
+    behaviour rather than the shop's and is deliberately untouched.
+    """
     shop.put(PATH, attest_matrix(mods, make_matrix_wig(WIG_ID), david, rows=1))
     report = shop.validate()
-    assert has(report.failures, "no perfect fit", PATH)
-    assert has(report.failures, "silence is not a claim", PATH)
-    assert has(report.failures, "vouched for 1", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
+    assert has(report.notes, "silence is not a claim", PATH)
+    assert has(report.notes, "vouched for 1", PATH)
 
 
 def test_a_whole_checklist_passes(shop, mods, david):
@@ -78,12 +84,15 @@ def test_a_whole_checklist_passes(shop, mods, david):
     assert report.ok, dict(report.failures)
 
 
-def test_one_missing_checklist_row_is_refused(shop, mods, david):
+def test_one_missing_checklist_row_is_accepted_and_counted(shop, mods, david):
     wig = make_matrix_wig(WIG_ID)
     total = len(checklist_of(mods, wig))
     shop.put(PATH, attest_matrix(mods, wig, david, rows=total - 1))
     report = shop.validate()
-    assert has(report.failures, "no perfect fit", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
+    assert has(report.notes, f"has {total} rows", PATH)
+    assert has(report.notes, f"vouched for {total - 1}", PATH)
 
 
 def test_an_excluded_checklist_row_is_not_a_perfect_fit(shop, mods, david):
@@ -94,7 +103,8 @@ def test_an_excluded_checklist_row_is_not_a_perfect_fit(shop, mods, david):
         mods, wig, david, verdicts={key: "wont_work"}
     ))
     report = shop.validate()
-    assert has(report.failures, "no perfect fit", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
 
 
 def test_the_index_agrees_with_the_validator(shop, mods, david):
@@ -123,8 +133,11 @@ def test_a_bundle_pinning_a_stale_lattice_is_orphaned(shop, mods, david):
     report = shop.validate()
     assert has(report.warnings, "vouched for a different lattice", PATH)
     assert has(report.warnings, "counts toward nothing", PATH)
-    # And with nothing current left, the gate is what refuses it.
-    assert has(report.failures, "no perfect fit", PATH)
+    # And with nothing current left, the wig still comes in, carrying
+    # the shortfall. An orphaned claim counts toward nothing, which is
+    # a statement about the count and not about admission.
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
 
 
 # ---------------------------------------------------------------------------
@@ -155,10 +168,16 @@ def test_a_lattice_repairs_in_place_keeping_its_id(shop, mods, david, mira):
     assert has(report.warnings, "orphaned", PATH)
 
 
-def test_a_repaired_lattice_still_needs_a_fresh_perfect_fit(
+def test_a_repaired_lattice_orphans_every_checklist_on_it(
     shop, mods, david
 ):
-    """David's old checklist pinned the old lattice. It cannot carry."""
+    """David's old checklist pinned the old lattice. It cannot carry.
+
+    The repaired file is admitted now, which is the gate change. What
+    must not change is that his checklist stops counting the moment the
+    lattice moves underneath it: the wig reads as having no perfect fit
+    of its own, and the orphaning is reported rather than silent.
+    """
     shop.put(PATH, attest_matrix(mods, make_matrix_wig(WIG_ID), david))
     base = shop.merge("matrix wig on the shelf")
 
@@ -166,8 +185,14 @@ def test_a_repaired_lattice_still_needs_a_fresh_perfect_fit(
     repaired["fittings"] = list(shop.read(PATH)["fittings"])  # stale only
     shop.put(PATH, repaired)
     report = shop.validate(PATH, base_ref=base)
-    assert has(report.failures, "no perfect fit", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
     assert has(report.warnings, "vouched for a different lattice", PATH)
+    # The lattice moved, so nobody has proven the description on file.
+    assert "| 0 |" in next(
+        line for line in shop.index().splitlines()
+        if line.startswith("|") and "Bench AC" in line
+    )
 
 
 # ---------------------------------------------------------------------------

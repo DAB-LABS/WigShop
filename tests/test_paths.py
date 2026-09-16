@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 import validate_wigs as vw
-from conftest import Person, attest, has, make_wig
+from conftest import Person, attest, codes, has, make_wig
 
 WIG_ID = "11111111-1111-4111-8111-111111111111"
 
@@ -37,16 +37,30 @@ def test_a_tier_suffix_is_accepted_so_downloads_need_no_rename(tier):
 
 
 def test_the_tier_in_a_name_is_never_read_as_evidence(shop, mods, david):
-    """A name that could promote a file by being edited defeats claims."""
+    """A name that could promote a file by being edited defeats claims.
+
+    The file below is called ``-perfect-fit`` and is not one. Under the
+    old gate the proof of that was a refusal. The gate is gone, so the
+    proof is now that the shop still counts the rows and still says the
+    wig falls short, having read the claims and not the filename.
+    """
+    path = "wigs/bench/bench-fan-b-1-perfect-fit.wig.json"
     wig = attest(
         mods,
         make_wig(WIG_ID, brand="Bench", kind="fan", model="B-1"),
         david,
         verdicts={"Speed Low": "not_on_device"},
     )
-    shop.put("wigs/bench/bench-fan-b-1-perfect-fit.wig.json", wig)
+    shop.put(path, wig)
     report = shop.validate()
-    assert has(report.failures, "no perfect fit")
+    assert "fit.short" in codes(report, path)
+    assert has(report.notes, "1 of 3 row(s) have nobody saying", path)
+    # And the index agrees, which is where a reader would see the claim
+    # a filename cannot make.
+    assert "| 0 |" in next(
+        line for line in shop.index().splitlines()
+        if line.startswith("|") and "Bench Remote" in line
+    )
 
 
 def test_a_wrong_brand_prefix_is_refused():

@@ -22,13 +22,15 @@ With no FILE arguments it validates every wig in ``wigs/``.
 Exit code is 0 when nothing failed, 1 otherwise. Warnings and notes
 never fail the run; they are there for a human to read.
 
-The shop's shelf holds current descriptions of devices, wholly proven.
-Three things follow, and most of this file is one of them:
+The shop's shelf holds current descriptions of devices. Three things
+follow, and most of this file is one of them:
 
-- **Perfect fits only.** A wig lands when at least one person has
-  claimed every row of it worked on their own hardware. Wig-level, not
-  bundle-level: an honest partial attestation may ride alongside, it
-  just cannot open the door.
+- **Fitted and perfectly fitted.** A wig lands when it is a wig for a
+  real device: no proof required and no signature required. It is
+  perfectly fitted when one person's signed bundle claims every row of
+  it worked on their own hardware. Wig-level, not bundle-level: an
+  honest partial attestation may ride alongside a whole one without
+  either of them lying about the other.
 - **Identity is the signing key.** One person, one current word. A
   re-fit from the same install replaces that person's earlier bundle
   rather than stacking a duplicate, so a legitimate re-attestation PR
@@ -402,6 +404,53 @@ def bundle_is_perfect(
     return expected <= worked
 
 
+def proven_coverage(wig, mods, digests=None, expected=None) -> tuple[int, int]:
+    """How many rows of this wig anybody has proven, out of how many.
+
+    The union across every current bundle, which is a different question
+    from ``bundle_is_perfect`` and has a different answer: a wig where
+    three people each proved a third is 12 of 12 here and perfect for
+    nobody. Both numbers are true and the index shows them in separate
+    columns for exactly that reason.
+
+    Here rather than in the index because the shop has been bitten once
+    by two callers answering a coverage question separately: the index
+    counted a one-row bundle over a whole lattice as a perfect fit while
+    the validator refused the same file. One function, one answer.
+
+    Matrix wigs count the checklist the lattice implies, and only
+    bundles pinning the lattice this file currently carries. A bundle
+    that vouched for a lattice since repaired is orphaned, and an
+    orphaned claim counts toward nothing (owner ruling 2026-08-08).
+
+    Returns ``(0, 0)`` when there is nothing to count, which is a wig
+    with no readable rows rather than a wig nobody has proven.
+    """
+    wf = mods["wig_format"]
+    bundles = wf.claims_of(wig)
+
+    if wig.climate is None:
+        if digests is None:
+            digests = wf.wig_row_digests(wig)
+        if not digests:
+            return 0, 0
+        return len(wf.coverage(bundles, digests)), len(digests)
+
+    if expected is None:
+        expected = matrix_checklist_digests(wig, mods)
+    if not expected:
+        return 0, 0
+    lattice = wf.cells_content_hash(wig.climate)
+    worked = {
+        row.digest
+        for bundle in bundles
+        if bundle.cells_hash and bundle.cells_hash == lattice
+        for row in bundle.rows
+        if row.verdict == wf.VERDICT_WORKED
+    }
+    return len(expected & worked), len(expected)
+
+
 def check_path_shape(rel_path: str, report: Report) -> str | None:
     """Folder and filename rules. Returns the brand folder, or None."""
     parts = Path(rel_path).parts
@@ -461,17 +510,33 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
     imported, so a wig that reads perfect here reads perfect in the
     Closet.
 
-    **The gate is perfect fits only** (owner ruling 2026-08-04), and it
-    is HAIR's word used HAIR's way: ``bundle_is_complete`` is true when
-    one bundle claims every current row worked. Wig-level, not
-    bundle-level -- the wig must be perfect, individual bundles need
-    not be, so an honest scoped attestation can ride alongside a whole
+    **The gate is fitted and perfectly fitted** (owner ruling
+    2026-09-14). A wig lands when it is a wig for a real device: no
+    proof required, no signature required. It is perfectly fitted when
+    one bundle claims every current row worked, which is HAIR's word
+    used HAIR's way -- ``bundle_is_complete``. Nothing in this function
+    refuses a wig for having no fitting, or for having one that falls
+    short. Both states are reported, and neither blocks.
+
+    **The gate used to be perfect fits only** (owner ruling
+    2026-08-04): a wig that could not show one whole witness was turned
+    away. What changed it was a contributor who owns the remote but not
+    the device. He can describe it honestly and cannot prove a single
+    row of it on hardware he does not have, and under the old gate his
+    wig never came in at all.
+
+    **The definition of a perfect fit survived that change unaltered.**
+    One bundle, every row, one person, one fitting. Not a union: three
+    people who each proved a third have proved nobody whole. What moved
+    is only what the shop does with a wig that does not have one.
+
+    Wig-level, not bundle-level -- individual bundles need not be
+    perfect, so an honest scoped attestation can ride alongside a whole
     proof without either one lying about the other.
 
-    The shop deliberately keeps no vocabulary of its own here. An
-    earlier gate admitted a wig when every row carried SOME claim and
-    called that "admitted", which needed three words for three states.
-    One gate needs one word, and it is already taken.
+    The shop keeps no vocabulary of its own here. Findings state what is
+    in the file ("no fitting yet", "4 of 12 rows") rather than naming a
+    tier, so the two words the owner chose stay the only two.
     """
     wf = mods["wig_format"]
     wfit = mods["wig_fitting"]
@@ -521,11 +586,21 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
         # entries has already been told exactly what is wrong with it,
         # and "no fitting" on a file that visibly contains one reads as
         # the tool being confused rather than the wig being wrong.
+        #
+        # A note rather than silence. The evaluation artifact is what a
+        # reviewer reads to decide what to say to a contributor, and
+        # "no fitting yet" is the single most useful thing to tell
+        # somebody who might go and get one. It moves no verdict --
+        # ``verdict_of`` reads failures and warnings only -- so it costs
+        # the wig nothing. Silence would leave the artifact unable to
+        # tell a fitted wig from a perfectly fitted one at all.
         if not legacy:
-            report.fail(
+            report.note(
                 rel_path,
-                "no fitting. Every wig in the shop was proven on real "
-                "hardware first; see CONTRIBUTING.md",
+                "no fitting yet. This wig comes in as fitted; it becomes "
+                "perfectly fitted when one person proves every row of it "
+                "on their own hardware. See CONTRIBUTING.md",
+                code="fit.none",
             )
         return
 
@@ -575,11 +650,10 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                 f"fitting {name!r} carries a signature that does not "
                 "verify. The record was altered after it was recorded",
             )
-        elif verdict is None:
-            report.warn(
-                rel_path,
-                f"fitting {name!r} is unsigned. Valid, just self-reported",
-            )
+        # Held rather than reported here: what an unsigned bundle costs
+        # depends on what it claims, and that is not known until its
+        # coverage has been worked out below.
+        unsigned = verdict is None
 
         for row in bundle.rows:
             if row.verdict == wf.VERDICT_WONT_WORK:
@@ -653,6 +727,35 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
         if complete:
             perfect.append(bundle)
 
+        # Unsigned, split by what the bundle claims (owner ruling
+        # 2026-09-16). A signature is what makes a name durable, and a
+        # bundle claiming the WHOLE wig is where that matters:
+        # "perfectly fitted by Ada" is a statement about Ada, so it
+        # stays a warning while nothing binds it to an install.
+        #
+        # A bundle claiming less is reporting coverage rather than
+        # conferring a tier. Once the gate opened, unsigned became the
+        # ordinary case, and a warning that fires on most wigs pushes
+        # nearly every pull request to accept-with-notes and empties the
+        # middle verdict of meaning. The shop made that mistake once
+        # already, with coverage notes firing on every flat wig.
+        if unsigned and complete:
+            report.warn(
+                rel_path,
+                f"fitting {name!r} claims every row and is unsigned. "
+                "Valid, just self-reported: nothing ties it to an "
+                "install, so it is one person's word without the part "
+                "that makes the person durable",
+                code="fit.unsigned",
+            )
+        elif unsigned:
+            report.note(
+                rel_path,
+                f"fitting {name!r} is unsigned. Valid, just "
+                "self-reported",
+                code="fit.unsigned",
+            )
+
     # One bundle per key per wig, an invariant since HAIR 0.9.7. Two
     # bundles sharing a key means the submitter's HAIR predates the
     # replace rule, or the file was hand-edited. Either way the fix is
@@ -679,8 +782,16 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                 "different people",
             )
 
-    # THE GATE. Perfect fits only: at least one person must have claimed
-    # every row of this wig worked on their own hardware.
+    # THE SHORTFALL. This was the gate until 2026-09-14, and it refused
+    # any wig no single person had proven whole. It is now a readout: the
+    # wig comes in either way, and what this says is how far short of
+    # perfectly fitted it falls.
+    #
+    # The arithmetic is unchanged and is the point. A wig where somebody
+    # proved 7 of 12 rows and a wig nobody has touched are the same tier
+    # now, and flattening them into one display would throw away real
+    # work. So the finding counts rows rather than naming a tier, which
+    # keeps the owner's two words the only two.
     if not perfect:
         if matrix:
             shortfall = (
@@ -690,15 +801,22 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                 if expected
                 else ""
             )
-            report.fail(
+            report.note(
                 rel_path,
-                "no perfect fit. The shop takes a wig when one person has "
-                "vouched for its whole checklist against the lattice this "
-                f"file carries.{shortfall} A bundle that simply omits a "
+                "not perfectly fitted yet: no one bundle here vouches for "
+                "the whole checklist against the lattice this file "
+                f"carries.{shortfall} A bundle that simply omits a "
                 "checklist row reads complete to HAIR 0.9.7, so the shop "
                 "re-derives the checklist from the lattice itself: "
-                "silence is not a claim. Import it into HAIR, live with "
-                "the device, and save it with every checklist row marked",
+                "silence is not a claim. The wig is welcome as it is. "
+                "Import it into HAIR, live with the device, and save it "
+                "with every checklist row marked to make it perfect",
+                code="fit.short",
+                params={
+                    "shape": "matrix",
+                    "checklist": len(expected) if expected else 0,
+                    "best_covered": best_covered,
+                },
             )
         else:
             proven = wf.coverage(
@@ -727,16 +845,24 @@ def check_claims(rel_path: str, wig, mods, report: Report) -> None:
                     f"{len(pairs)} fitters, but no single one of them "
                     "covers the whole wig"
                 )
-            report.fail(
+            report.note(
                 rel_path,
-                f"no perfect fit: {detail}. The shop takes a wig when ONE "
-                "person has proven every row on their own hardware -- a "
-                "file where three people each proved a third is a file "
-                "nobody has watched work. Fit the remaining rows and save "
-                "to the closet again. If your hardware revision does not "
-                "have these buttons, do not trim them out of a shared "
-                "wig: save your revision as its own wig, named for what "
-                "it is",
+                f"not perfectly fitted yet: {detail}. A wig is perfectly "
+                "fitted when ONE person has proven every row on their own "
+                "hardware -- a file where three people each proved a "
+                "third is a file nobody has watched work. The wig is "
+                "welcome as it is; proving the remaining rows and saving "
+                "to the closet again is what makes it perfect. If your "
+                "hardware revision does not have these buttons, do not "
+                "trim them out of a shared wig: save your revision as its "
+                "own wig, named for what it is",
+                code="fit.short",
+                params={
+                    "shape": "flat",
+                    "rows": len(digests),
+                    "unproven": len(missing),
+                    "fitters": len(pairs),
+                },
             )
 
     # A second GitHub account on a different key is two people or one
@@ -1848,6 +1974,48 @@ def check_shelf(
             f"replaces a wig with {incumbent} independent fitting(s). "
             + overlap_line(ov)
         )
+
+        # THE DOWNGRADE RULE (owner ruling 2026-09-16). The entry gate
+        # came off on 2026-09-14, and the one way that can make the
+        # shelf worse rather than larger is here: the shelf holds one
+        # wig per device, so an unproven file superseding a proven one
+        # replaces a description somebody watched work with one nobody
+        # has. Under the old gate this was impossible, because every
+        # successor had to be a perfect fit to land at all.
+        #
+        # Counted the same way ``incumbent`` is, and computed rather
+        # than read: a wig's own word about itself is not evidence.
+        #
+        # A refusal rather than a warning, and the difference is who
+        # decides. A failing check on GitHub is still something the
+        # owner can merge past, so this does not close the case of
+        # somebody who can see a defect, can correct it, and has no
+        # hardware to prove the correction on. It moves that decision
+        # from the contributor to the owner, which is where a decision
+        # to degrade the shelf belongs. The last sentence of the finding
+        # is there to tell a contributor the door exists.
+        successor = len({
+            bundle_identity(b)
+            for b in wf.claims_of(shelved.wig)
+            if bundle_is_perfect(b, shelved.wig, mods)
+        })
+        if incumbent and not successor:
+            report.fail(
+                path,
+                f"replaces a wig with {incumbent} independent fitting(s) "
+                "with one that has none. The shelf holds one wig per "
+                "device, so this would swap a proven description for an "
+                "unproven one. Fit this wig and submit it again. If the "
+                "wig on the shelf is wrong and you can correct it but "
+                "cannot prove the correction on your own hardware, say "
+                "so here and a maintainer can decide",
+                code="supersede.downgrade",
+                params={
+                    "incumbent": incumbent,
+                    "successor": successor,
+                    "replaces": replaced.path,
+                },
+            )
 
         if ancestry[:1] == [replaced.wig_id]:
             report.note(path, f"supersedes {replaced.path}. {line}")

@@ -12,7 +12,7 @@ bundle added carrying the same key. That is still shape 1.
 from __future__ import annotations
 
 import pytest
-from conftest import Person, attest, has, make_wig
+from conftest import Person, attest, codes, has, make_wig
 
 PATH = "wigs/bench/bench-fan-b-1.wig.json"
 WIG_ID = "11111111-1111-4111-8111-111111111111"
@@ -171,15 +171,60 @@ def test_two_generations_in_one_pull_request(shop, mods, david, shelved):
     assert has(report.notes, "2 generations in one pull request", PATH)
 
 
-def test_a_successor_must_clear_the_gate_on_its_own(
+def test_a_successor_may_not_downgrade_a_proven_wig(
     shop, mods, david, mira, shelved
 ):
-    """Nobody has proven the new description until somebody proves it."""
+    """The one way removing the gate could make the shelf worse.
+
+    The shelf holds one wig per device, so an unproven successor does
+    not sit alongside the proven wig it names, it takes its place. This
+    was impossible under the old gate, where every successor had to be
+    a perfect fit to land at all, and nothing else stops it now.
+    """
     heir = make_wig(HEIR_ID, rows=4, supersedes=[WIG_ID])
     attest(mods, heir, david, verdicts={"Speed Medium": "wont_work"})
     shop.put(PATH, heir)
     report = shop.validate(PATH, base_ref=shelved)
-    assert has(report.failures, "no perfect fit", PATH)
+    assert "supersede.downgrade" in codes(report, PATH)
+    assert has(report.failures, "with one that has none", PATH)
+    # And the door out is named, because a maintainer can merge past a
+    # red check and that is where this decision belongs.
+    assert has(report.failures, "a maintainer can decide", PATH)
+
+
+def test_a_successor_replacing_an_unproven_wig_is_accepted(
+    shop, mods, david, mira
+):
+    """The twin of the test above, and the one that says what the rule
+    is for.
+
+    Nothing here is proven on either side, so there is no proof to
+    protect and the refusal must not fire. Without this test a reader
+    cannot tell the downgrade rule from the entry gate that was just
+    removed, because both would look like "unproven wigs get refused".
+    """
+    shop.put(PATH, make_wig(WIG_ID))
+    base = shop.merge("an unproven wig on the shelf")
+
+    heir = make_wig(HEIR_ID, rows=4, supersedes=[WIG_ID])
+    shop.put(PATH, heir)
+    report = shop.validate(PATH, base_ref=base)
+    assert report.ok, dict(report.failures)
+    assert "supersede.downgrade" not in codes(report, PATH)
+    assert has(report.notes, "replaces a wig with 0 independent", PATH)
+
+
+def test_a_successor_with_its_own_perfect_fit_is_a_plain_supersession(
+    shop, mods, david, mira, shelved
+):
+    """Proof for proof. The readout stays a note and nothing refuses."""
+    heir = make_wig(HEIR_ID, rows=4, supersedes=[WIG_ID])
+    attest(mods, heir, mira)
+    shop.put(PATH, heir)
+    report = shop.validate(PATH, base_ref=shelved)
+    assert report.ok, dict(report.failures)
+    assert "supersede.downgrade" not in codes(report, PATH)
+    assert has(report.notes, "replaces a wig with 1 independent", PATH)
 
 
 def test_trimming_somebody_elses_proof_is_refused(shop, mods, david, mira):

@@ -1,9 +1,15 @@
-"""INDEX.md: one number, counted by signing key.
+"""INDEX.md: two numbers, and they count different things.
 
-Fittings counts perfect fits, which under the perfect-only gate is
-every wig on the shelf by at least one. There is no second column: the
-gate and the rating are the same thing, so a second number would only
-invite the reader to wonder why they differ.
+**Fittings** counts perfect fits by signing key, which is what
+WigFactory watches and what the promotion story rests on. It has not
+changed meaning. Since the gate came off on 2026-09-14 a zero there is
+an ordinary value rather than an impossible one.
+
+**Proven** counts rows anybody has proven. It exists because a wig
+where somebody proved most of it and a wig nobody has touched are now
+the same tier, and letting those render identically would throw away
+real work. The two are separate columns precisely so a reader who
+compares them learns something true.
 """
 
 from __future__ import annotations
@@ -26,6 +32,106 @@ def row_for(shop, name: str) -> str:
         for line in shop.index().splitlines()
         if line.startswith("|") and name in line
     )
+
+
+def cell(shop, name: str, column: str) -> str:
+    """One cell, found by its column heading rather than its position.
+
+    Hardcoding an index keeps passing against the wrong number the day
+    a column moves, which is the sort of quiet wrong answer this suite
+    exists to prevent.
+    """
+    lines = shop.index().splitlines()
+    header = next(x for x in lines if x.startswith("| Brand |"))
+    where = [c.strip() for c in header.split("|")].index(column)
+    row = next(x for x in lines if x.startswith("|") and name in x)
+    return row.split("|")[where].strip()
+
+
+# ---------------------------------------------------------------------------
+# A wig with no fitting at all
+# ---------------------------------------------------------------------------
+
+
+def test_a_fitted_wig_reads_zero_with_no_fitter_named(shop, mods):
+    """Zero is a real value now, not an impossible one."""
+    shop.put(PATH, make_wig(WIG_ID))
+    assert cell(shop, "Bench Remote", "Fittings") == "0"
+    assert cell(shop, "Bench Remote", "Fitted by") == ""
+
+
+def test_fitted_wigs_sort_below_perfectly_fitted_ones(shop, mods, david):
+    """Most proven first, and the brand tiebreak must not override it.
+
+    Alpha sorts before Zeta alphabetically, so a sort that had quietly
+    become alphabetical would put the unproven wig on top.
+    """
+    alpha = make_wig(
+        "33333333-3333-4333-8333-333333333333",
+        name="Alpha Remote",
+        brand="Alpha",
+        model="A-1",
+    )
+    zeta = attest(
+        mods,
+        make_wig(
+            "44444444-4444-4444-8444-444444444444",
+            name="Zeta Remote",
+            brand="Zeta",
+            model="Z-1",
+        ),
+        david,
+    )
+    shop.put("wigs/alpha/alpha-fan-a-1.wig.json", alpha)
+    shop.put("wigs/zeta/zeta-fan-z-1.wig.json", zeta)
+
+    lines = [
+        line for line in shop.index().splitlines()
+        if line.startswith("|") and "Remote]" in line
+    ]
+    assert "Zeta Remote" in lines[0]
+    assert "Alpha Remote" in lines[1]
+
+
+# ---------------------------------------------------------------------------
+# The Proven column
+# ---------------------------------------------------------------------------
+
+
+def test_the_proven_column_counts_rows_not_people(shop, mods, david):
+    """Signed partial work stays visible even though it has no tier."""
+    wig = make_wig(WIG_ID, rows=7)
+    attest(
+        mods,
+        wig,
+        david,
+        verdicts={
+            "Speed High": "not_on_device",
+            "Oscillate": "wont_work",
+        },
+    )
+    shop.put(PATH, wig)
+    assert cell(shop, "Bench Remote", "Fittings") == "0"
+    assert cell(shop, "Bench Remote", "Proven") == "5 of 7"
+
+
+def test_the_proven_column_is_blank_for_a_perfect_fit(shop, mods, david):
+    """The Fittings column has already said it."""
+    shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
+    assert cell(shop, "Bench Remote", "Fittings") == "1"
+    assert cell(shop, "Bench Remote", "Proven") == ""
+
+
+def test_the_proven_column_is_blank_when_nobody_has_claimed_anything(
+    shop, mods
+):
+    """An absence, not a finding.
+
+    Printing "0 of 3" on a wig nobody has touched would read as a mark
+    against it, which is the one thing the gate change was made to stop.
+    """
+    shop.put(PATH, make_wig(WIG_ID))
+    assert cell(shop, "Bench Remote", "Proven") == ""
 
 
 def test_a_lone_perfect_fit_reads_one(shop, mods, david):
@@ -59,14 +165,39 @@ def test_the_count_is_keys_not_handles(shop, mods):
     assert "| 2 |" in row_for(shop, "Bench Remote")
 
 
-def test_there_is_exactly_one_number(shop, mods, david):
-    """Covered went for reading 12/12 forever; Fitters would have read
-    the same as Fittings forever, which is the same fault twice."""
+def test_the_second_number_earns_its_place(shop, mods, david):
+    """Two numbers now, and the old objection to a second one expired.
+
+    A column called Covered was rejected once for reading 12/12
+    forever, and Fitters for reading the same as Fittings forever. Both
+    faults were the same fault: a column that cannot vary teaches a
+    reader nothing and invites them to wonder why two numbers differ
+    when they never do.
+
+    Under the perfect-only gate every wig on the shelf was covered
+    whole, so Covered could not vary. That gate is gone, a wig can now
+    sit on the shelf at 5 of 7, and the column varies. So it is kept,
+    under a name that says what it counts, and the two rejected names
+    stay rejected because they still describe nothing.
+    """
     shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
     index = shop.index()
     assert "Covered" not in index
     assert "Fitters" not in index
-    assert "| Fittings | Fitted by |" in index
+    assert "| Fittings | Proven | Fitted by |" in index
+
+    # It varies, which is the whole argument for it existing.
+    partial = make_wig(
+        "55555555-5555-4555-8555-555555555555",
+        name="Partial Remote",
+        brand="Partial",
+        model="P-1",
+        rows=7,
+    )
+    attest(mods, partial, david, verdicts={"Oscillate": "wont_work"})
+    shop.put("wigs/partial/partial-fan-p-1.wig.json", partial)
+    assert cell(shop, "Partial Remote", "Proven") == "6 of 7"
+    assert cell(shop, "Bench Remote", "Proven") == ""
 
 
 def test_an_empty_shelf_says_so(shop):

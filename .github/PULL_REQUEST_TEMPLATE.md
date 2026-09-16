@@ -27,14 +27,15 @@ Codes that started life in another project's database are fine here, as long as 
 
 ## Always
 
-- [ ] I did not add a code to this file that I have not watched work on real hardware.
 - [ ] The file is at `wigs/<brand>/<the name HAIR gave the download>`, brand folder lowercase with hyphens.
+- [ ] This wig contains codes I have not watched work on my own hardware. Tick it if so. A wig is welcome either way, and knowing up front is worth more to the next person than finding out later.
 
 ## Opening a wig: new, or replacing one that is here
 
 Skip this section if you are adding your fitting to a wig that is already on the shelf.
 
-- [ ] **I proved every row of this wig myself, in one fitting.** Not "between us" and not "all but one" -- the whole thing, by me. This is the gate, and it applies to a replacement exactly as it does to a new wig, because nobody has proven the new description until somebody proves it.
+- [ ] **I proved every row of this wig myself, in one fitting.** Not "between us" and not "all but one" -- the whole thing, by me. Optional. Tick it if you did; a wig is welcome either way.
+- [ ] This replaces a wig that somebody had proven whole, and mine is not proven whole. The checks refuse that, because the shelf holds one wig per device and this would put an untested description in a tested one's place. Say below why the change is needed and a maintainer can decide.
 - [ ] This wig is in `unbranded/`, and it carries an FCC ID, UPC or ASIN in `identifiers`.
 - [ ] This replaces a wig whose codes had to change. I fixed the device and let HAIR save it as the successor, so it carries its own lineage, and I have accounted for every changed and removed row below.
 - [ ] My hardware revision differs from a wig already here, so this is a separate wig for that revision rather than an edit to the shared file.
@@ -42,7 +43,7 @@ Skip this section if you are adding your fitting to a wig that is already on the
 ## Adding your fitting to a wig already here
 
 - [ ] I downloaded the current file from this repo before fitting it, so my file carries everyone else's fittings alongside mine.
-- [ ] I proved every code in it, the same as anyone opening a wig. Your name going on the file is what tells the next person it is worth downloading.
+- [ ] I proved every code in it. That is what makes the wig perfectly fitted, and your name going on the file is what tells the next person it is worth downloading.
 
 <!--
 A note on the filename, since it misleads: the -perfect-fit suffix
