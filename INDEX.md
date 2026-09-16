@@ -7,7 +7,15 @@ so edits here are overwritten. Change a wig, not this page.
 **Fittings** is how many people have proven every row of this wig on
 their own hardware. It is the closest thing to a rating this repo has,
 and unlike a star it costs somebody real time in front of real
-hardware. Every wig here has at least one, because that is the door.
+hardware. A zero is not a mark against a wig. It means nobody has
+proven the whole thing yet, and it is the most useful thing anybody can
+change.
+
+**Proven** is how many rows of a wig somebody has proven, out of how
+many it has. The two columns count different things on purpose:
+Fittings counts people, Proven counts rows. A wig showing no fittings
+and 9 of 12 proven is one where real work has been done and no single
+person has yet gone end to end.
 
 One fitting is one person's word. Four is four people, four units, four
 rooms, four blasters, all reaching the same answer, and there is no way
@@ -28,12 +36,12 @@ product identifier.
 
 4 wig(s).
 
-| Brand | Kind | Model | Wig | Fittings | Fitted by | Identifiers |
-|---|---|---|---|---:|---|---|
-| Sanmli | light | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 2 | David B, David Bailey | asin: B0DF7FPV55; upc: 794969274724 |
-| Daikin | ac | FTXS50KVM | [Daikin FTXS50KVM](wigs/daikin/daikin-ac-ftxs50kvm-perfect-fit.wig.json) | 1 | Andre Mello |  |
-| Dreo | fan | DR-HAF004S | [Live Fan](wigs/dreo/dreo-fan-dr-haf004s-perfect-fit.wig.json) | 1 | Kevin | asin: B0D25XNX7P; upc: 810142853101 |
-| WInix | fan | 5500 | [Winix Air Purifier](wigs/winix/winix-fan-5500-perfect-fit.wig.json) | 1 | kenobob |  |
+| Brand | Kind | Model | Wig | Fittings | Proven | Fitted by | Identifiers |
+|---|---|---|---|---:|---:|---|---|
+| Sanmli | light | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 2 |  | David B, David Bailey | asin: B0DF7FPV55; upc: 794969274724 |
+| Daikin | ac | FTXS50KVM | [Daikin FTXS50KVM](wigs/daikin/daikin-ac-ftxs50kvm-perfect-fit.wig.json) | 1 |  | Andre Mello |  |
+| Dreo | fan | DR-HAF004S | [Live Fan](wigs/dreo/dreo-fan-dr-haf004s-perfect-fit.wig.json) | 1 |  | Kevin | asin: B0D25XNX7P; upc: 810142853101 |
+| WInix | fan | 5500 | [Winix Air Purifier](wigs/winix/winix-fan-5500-perfect-fit.wig.json) | 1 |  | kenobob |  |
 
 ---
 
@@ -41,6 +49,6 @@ product identifier.
 **Identifiers** are FCC IDs, UPCs and ASINs, which are how hardware with
 no meaningful brand stays findable.
 
-Nothing here was accepted on somebody's word. Every wig on this page has
-been watched working end to end, on real hardware, by at least one of
-the people named beside it.
+Every wig here is a real wig for a real device. The perfectly fitted
+ones were proven end to end, on the hardware, by one person who signed
+for it, and those are the ones with a name beside them.

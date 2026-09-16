@@ -1,13 +1,18 @@
 """The entry gate, and everything the shop asks of one file's claims.
 
-Perfect fits only, ruled 2026-08-04: a wig lands when at least one
-person has claimed every row of it worked on their own hardware.
+Fitted and perfectly fitted, ruled 2026-09-14: a wig lands when it is a
+wig for a real device, and it is perfectly fitted when one person has
+claimed every row of it worked on their own hardware.
+
+The tests here that read as inversions of an older rule are exactly
+that, and they are kept rather than deleted because an inverted test is
+the record that the rule changed.
 """
 
 from __future__ import annotations
 
 import pytest
-from conftest import Person, attest, has, make_wig
+from conftest import Person, attest, codes, has, make_wig
 
 PATH = "wigs/bench/bench-fan-b-1.wig.json"
 WIG_ID = "11111111-1111-4111-8111-111111111111"
@@ -30,14 +35,54 @@ def test_a_perfect_fit_gets_in(shop, mods, david):
     assert report.ok, report.failures
 
 
-def test_no_fitting_at_all_is_refused(shop, mods):
+def test_no_fitting_at_all_is_accepted(shop, mods):
+    """The floor is zero. A wig that is a wig comes in."""
     shop.put(PATH, make_wig(WIG_ID))
     report = shop.validate()
-    assert has(report.failures, "no fitting", PATH)
+    assert report.ok, dict(report.failures)
+    assert has(report.notes, "no fitting yet", PATH)
+    assert "fit.none" in codes(report, PATH)
 
 
-def test_a_scoped_fitting_alone_cannot_open_the_door(shop, mods, david):
-    """not_on_device is honest, and honesty is not a whole witness."""
+def test_a_wig_with_no_fittings_key_at_all_is_accepted(shop, mods):
+    """HAIR writes the key; a hand-made file need not have it."""
+    wig = make_wig(WIG_ID)
+    del wig["fittings"]
+    shop.put(PATH, wig)
+    report = shop.validate()
+    assert report.ok, dict(report.failures)
+    assert "fit.none" in codes(report, PATH)
+
+
+def test_an_empty_fittings_list_reads_the_same_as_no_key(shop, mods):
+    wig = make_wig(WIG_ID)
+    wig["fittings"] = []
+    shop.put(PATH, wig)
+    report = shop.validate()
+    assert report.ok, dict(report.failures)
+    assert "fit.none" in codes(report, PATH)
+
+
+def test_a_perfectly_fitted_wig_carries_no_shortfall(shop, mods, david):
+    """The positive twin of the three above.
+
+    Without it, "fit.none is present" could pass on a fixture that
+    produces the note no matter what, and nothing would catch a check
+    that had stopped distinguishing the two states.
+    """
+    shop.put(PATH, attest(mods, make_wig(WIG_ID), david))
+    report = shop.validate()
+    assert report.ok, dict(report.failures)
+    assert "fit.none" not in codes(report, PATH)
+    assert "fit.short" not in codes(report, PATH)
+
+
+def test_a_scoped_fitting_alone_now_opens_the_door(shop, mods, david):
+    """not_on_device is honest, and honesty is enough to come in.
+
+    It is still not a whole witness, and the shortfall says so by
+    counting rows rather than by refusing the file.
+    """
     wig = attest(
         mods,
         make_wig(WIG_ID),
@@ -46,8 +91,10 @@ def test_a_scoped_fitting_alone_cannot_open_the_door(shop, mods, david):
     )
     shop.put(PATH, wig)
     report = shop.validate()
-    assert has(report.failures, "no perfect fit", PATH)
-    assert has(report.failures, "'Speed Low'", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
+    assert has(report.notes, "1 of 3 row(s) have nobody saying", PATH)
+    assert has(report.notes, "'Speed Low'", PATH)
 
 
 def test_union_coverage_is_not_a_perfect_fit(shop, mods, david, mira):
@@ -57,8 +104,9 @@ def test_union_coverage_is_not_a_perfect_fit(shop, mods, david, mira):
     attest(mods, wig, mira, verdicts={"Power On": "wont_work"})
     shop.put(PATH, wig)
     report = shop.validate()
-    assert has(report.failures, "no perfect fit", PATH)
-    assert has(report.failures, "no single one of them", PATH)
+    assert report.ok, dict(report.failures)
+    assert "fit.short" in codes(report, PATH)
+    assert has(report.notes, "no single one of them", PATH)
 
 
 def test_a_scoped_fitting_may_ride_alongside_a_perfect_one(
@@ -119,12 +167,37 @@ def test_an_altered_bundle_fails_its_signature(shop, mods, david):
     assert has(report.failures, "does not verify", PATH)
 
 
-def test_an_unsigned_bundle_is_a_warning_not_a_failure(shop, mods, david):
+def test_an_unsigned_whole_claim_is_a_warning_not_a_failure(
+    shop, mods, david
+):
+    """A signature is what makes a name durable, and a bundle claiming
+    the whole wig is a statement about a person."""
     wig = attest(mods, make_wig(WIG_ID), david, sign=False)
     shop.put(PATH, wig)
     report = shop.validate()
     assert report.ok, report.failures
-    assert has(report.warnings, "unsigned", PATH)
+    assert has(report.warnings, "claims every row and is unsigned", PATH)
+
+
+def test_an_unsigned_partial_claim_is_only_a_note(shop, mods, david):
+    """Owner ruling 2026-09-16, and the reason is measurable noise.
+
+    Unsigned is the ordinary case now. A warning that fires on most
+    wigs would push nearly every pull request to accept-with-notes and
+    empty the middle verdict of meaning.
+    """
+    wig = attest(
+        mods,
+        make_wig(WIG_ID),
+        david,
+        sign=False,
+        verdicts={"Speed Low": "not_on_device"},
+    )
+    shop.put(PATH, wig)
+    report = shop.validate()
+    assert report.ok, report.failures
+    assert not has(report.warnings, "unsigned", PATH)
+    assert has(report.notes, "is unsigned", PATH)
 
 
 def test_two_bundles_on_one_key_are_refused(shop, mods, david):

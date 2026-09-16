@@ -343,6 +343,21 @@ def has(bucket: dict, needle: str, path: str | None = None) -> bool:
     return any(needle in m for m in messages(bucket, path))
 
 
+def codes(report, path: str | None = None) -> set[str]:
+    """Every coded finding on a report, optionally for one path.
+
+    A code is the permanent name for a kind of finding and the text
+    beside it is free to be reworded, so a test that pins a code breaks
+    only when the finding changes meaning, while a test that pins a
+    sentence breaks on a comma.
+    """
+    return {
+        entry.code
+        for entry in report.entries
+        if entry.code and (path is None or entry.path == path)
+    }
+
+
 # ---------------------------------------------------------------------------
 # Matrix wigs
 # ---------------------------------------------------------------------------

@@ -28,6 +28,7 @@ from validate_wigs import (
     discover,
     load_hair,
     matrix_checklist_digests,
+    proven_coverage,
 )
 
 HEADER = """# Index
@@ -39,7 +40,15 @@ so edits here are overwritten. Change a wig, not this page.
 **Fittings** is how many people have proven every row of this wig on
 their own hardware. It is the closest thing to a rating this repo has,
 and unlike a star it costs somebody real time in front of real
-hardware. Every wig here has at least one, because that is the door.
+hardware. A zero is not a mark against a wig. It means nobody has
+proven the whole thing yet, and it is the most useful thing anybody can
+change.
+
+**Proven** is how many rows of a wig somebody has proven, out of how
+many it has. The two columns count different things on purpose:
+Fittings counts people, Proven counts rows. A wig showing no fittings
+and 9 of 12 proven is one where real work has been done and no single
+person has yet gone end to end.
 
 One fitting is one person's word. Four is four people, four units, four
 rooms, four blasters, all reaching the same answer, and there is no way
@@ -65,7 +74,7 @@ EMPTY = """
 The shop is open and nothing has landed in it.
 
 If you have a remote working in HAIR, you are most of the way there.
-Fit it, download it, and open a pull request:
+Download it and open a pull request:
 [CONTRIBUTING.md](CONTRIBUTING.md). The first entry is the one everyone
 else copies.
 """
@@ -77,9 +86,9 @@ FOOTER = """
 **Identifiers** are FCC IDs, UPCs and ASINs, which are how hardware with
 no meaningful brand stays findable.
 
-Nothing here was accepted on somebody's word. Every wig on this page has
-been watched working end to end, on real hardware, by at least one of
-the people named beside it.
+Every wig here is a real wig for a real device. The perfectly fitted
+ones were proven end to end, on the hardware, by one person who signed
+for it, and those are the ones with a name beside them.
 """
 
 
@@ -91,14 +100,22 @@ def escape(value: str) -> str:
 def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     """One table row, plus the sort keys behind it.
 
-    One number, and it is perfect fits: people whose claims cover every
-    row of this wig. That is the shop's gate and the shop's rating at
-    once, which is the point -- there is nothing else to explain.
+    Two numbers, and they answer different questions. **Fittings** is
+    perfect fits: people whose claims cover every row of this wig. That
+    is what WigFactory watches and what the promotion story rests on,
+    and it has not changed meaning. **Proven** is how many rows anybody
+    has proven, which is what keeps signed partial work visible now that
+    it shares a tier with work nobody has done.
 
-    Counted by signing key rather than by handle. Handles carry no
-    uniqueness -- two people called David are two people when their keys
-    differ, and one person is never two -- and since HAIR 0.9.7 the key
-    is what decides whether a re-fit replaces or appends.
+    Proven is blank in the two cases where it would say nothing. On a
+    perfectly fitted wig the Fittings column has already said it. On a
+    wig with no claims at all there is nothing to report, and printing
+    "0 of 12" there would read as a finding rather than an absence.
+
+    Fittings is counted by signing key rather than by handle. Handles
+    carry no uniqueness -- two people called David are two people when
+    their keys differ, and one person is never two -- and since HAIR
+    0.9.7 the key is what decides whether a re-fit replaces or appends.
     """
     wf = mods["wig_format"]
 
@@ -117,6 +134,12 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     fittings = {bundle_identity(b) for b in perfect}
     handles = sorted({b.handle for b in perfect if b.handle})
 
+    proven = ""
+    if not fittings and bundles:
+        got, total = proven_coverage(wig, mods, digests, expected)
+        if total:
+            proven = f"{got} of {total}"
+
     ids = []
     for key in sorted(wig.identifiers or {}):
         for value in wf.identifier_values(wig.identifiers, key):
@@ -127,13 +150,15 @@ def wig_row(rel_path: str, wig, mods) -> tuple[str, int, str]:
     link = f"[{name}]({rel_path})"
 
     row = (
-        "| {brand} | {kind} | {model} | {link} | {count} | {who} | {ids} |"
+        "| {brand} | {kind} | {model} | {link} | {count} | {proven} "
+        "| {who} | {ids} |"
     ).format(
         brand=escape(brand),
         kind=escape(wig.kind or ""),
         model=escape(wig.model or ""),
         link=link,
         count=len(fittings),
+        proven=proven,
         who=escape(", ".join(handles)),
         ids=escape("; ".join(ids)),
     )
@@ -183,9 +208,9 @@ def build(root: Path, mods) -> str:
 
     parts.append(
         f"\n{len(rows)} wig(s).\n\n"
-        "| Brand | Kind | Model | Wig | Fittings | Fitted by "
+        "| Brand | Kind | Model | Wig | Fittings | Proven | Fitted by "
         "| Identifiers |\n"
-        "|---|---|---|---|---:|---|---|\n"
+        "|---|---|---|---|---:|---:|---|---|\n"
     )
     parts.append("\n".join(row for row, _, _ in rows))
     parts.append("\n")

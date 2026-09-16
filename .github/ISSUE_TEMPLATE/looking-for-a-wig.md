@@ -8,9 +8,12 @@ assignees: ""
 
 <!--
 Straight answer first, because it saves you waiting: nobody can add a
-wig for a device they do not physically have. Every wig here was proven
-button by button on real hardware, so a request is not a work item for a
-maintainer.
+wig for a device whose remote they do not physically have, so a request
+is not a work item for a maintainer.
+
+Worth knowing: a wig does not have to be proven to be posted. If
+somebody has the remote, the wig is welcome even if nobody has been able
+to test it against the device yet.
 
 What it IS good for is finding the other person who owns one. That
 happens, and this is where it happens.

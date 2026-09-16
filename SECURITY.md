@@ -31,7 +31,9 @@ actually did.
 
 **A wig you believe was contributed dishonestly**, such as fittings that
 look rubber-stamped, or a bulk conversion of somebody else's database
-presented as hardware-proven work. Open an issue or email
+presented as hardware-proven work. Posting codes nobody has tested is
+not dishonest and is expressly welcome; presenting untested codes as
+proven is the thing worth reporting. Open an issue or email
 **david.a.bailey@gmail.com** if you would rather not do it in public.
 Contributions here rest on one declaration being true, and that is worth
 protecting.
@@ -57,23 +59,30 @@ It does not prove identity. Nobody verified who the fitter is, the
 handle is whatever they typed, and a GitHub handle is checkable only by
 asking that person. It does not prove the codes are safe, correct, or
 that they came from anywhere in particular. Unsigned fittings are
-perfectly valid here; they are simply self-reported.
+perfectly valid here and are the common case rather than the exception;
+they are simply self-reported. A wig with no fitting at all is ordinary
+too. A wig with a signature that does not verify is the one to look at,
+because unsigned and tampered are not the same thing.
 
 None of this is a chain of trust and the documentation should not
 pretend otherwise. It is tamper-evidence on a social claim.
 
 ## Where the strict gate actually is
 
-Entering this repository needs one complete fitting from a named person.
-If that turns out to be wrong, a wig does not work and the file gets
-deleted.
+Entering this repository needs a wig for a real device, and nothing
+more. Proof is recorded rather than required, so the shelf holds wigs
+nobody has tested and says so on each one. If a wig turns out to be
+wrong, it does not work and the file gets deleted.
 
 [WigFactory](https://github.com/DAB-LABS/WigFactory) is the gate that
 matters, because that is where a code set becomes generated code people
 install. It needs three complete fittings from three distinct GitHub
 handles with no failed signals. Being wrong there means a published
 integration misbehaving under the project's name, so the bar sits there
-rather than here.
+rather than here. That was true when this repository had a strict gate
+of its own, and it is more true now that it does not: the factory's bar
+is the only thing between an untested submission and an installable
+integration.
 
 ## Reporting HAIR itself
 
