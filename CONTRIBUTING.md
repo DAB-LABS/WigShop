@@ -58,6 +58,8 @@ Put your GitHub handle in. On a signed fitting nothing counts it -- the shop cou
 2. Open a pull request adding it at `wigs/<brand>/<the filename HAIR gave you>`.
 3. Tick the declaration in the pull request template.
 
+**If you did not capture the wig yourself, run it through HAIR once before step 1.** A wig somebody posted in a forum thread, or a file assembled from a manufacturer's code list, is not yet something this repo can take: it has no `wig_id`, and that is minted rather than written. Adopt it with **Use Device**, give it a name, and HAIR saves it to the Closet on its own. Then download it from there and carry on below. That one pass mints the id, writes the comb receipt, and names the file the way the shop files it.
+
 **You should not need to rename anything.** Since 0.9.7 HAIR composes the download name from the wig's own fields, `<brand>-<kind>-<model>.wig.json`, with `-perfect-fit` on the end when the wig is one, which is exactly the shape this repo files under. If it does need a rename, something is off; say so in the pull request and we will look at it rather than making you fight the name.
 
 The shop never reads the tier from a filename. It runs the claims. A name that could promote a file by being edited would defeat the point of signed per-row claims, so `-perfect-fit` is a courtesy to you at the moment of download and nothing more.
