@@ -1,0 +1,142 @@
+{
+    "format": "hair-wig/3",
+    "name": "Electric Fireplace",
+    "wig_id": "21e8a44d-b589-4364-b806-5316be4c2ea1",
+    "brand": "allen + roth",
+    "model": "2289FM-26-932",
+    "kind": "fireplace",
+    "notes": "allen + roth 53-in W Sedona free-standing infrared quartz electric fireplace, Lowe's item #4976290 (manual DF26322). 1500 W, 5,100 BTU. IR: NEC, address 0x7F80. Power 0x1A, Flame Brightness 0x01, Temp Up 0x02, Flame Speed 0x03, Temp Down 0x07, Timer 0x09. Flame Brightness 5>4>3>2>1>Off. Timer 30m,1H..9H,Off per manual. Thermostat: manual 65-90F/HI/oF. Heater override (E3) and C/F toggle are panel-only, not on the remote.",
+    "origin": "device",
+    "identifiers": {
+        "oem": "Home Insights LCC"
+    },
+    "signals": [
+        {
+            "alias": "Flame Speed",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0040 0015 0040 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Temperature Down",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0040 0015 0040 0015 0040 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Temperature Up",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0016 0015 0040 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Timer",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0040 0015 0016 0015 0016 0015 0040 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Flame Brightness",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0040 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Power",
+            "pronto": "0000 006D 0022 0000 0157 00AB 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0040 0015 0016 0015 0016 0015 0040 0015 0016 0015 0040 0015 0040 0015 0016 0015 0016 0015 0016 0015 0040 0015 0016 0015 0040 0015 0016 0015 0016 0015 0040 0015 0040 0015 0040 0015 0475",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        }
+    ],
+    "comb": {
+        "version": 2,
+        "date": "2026-09-30",
+        "suspects": 0,
+        "counts": {},
+        "findings": [],
+        "coverage": {
+            "codes": 6,
+            "checked": 6,
+            "checks": {
+                "frame-shape": {
+                    "checked": 6,
+                    "declined": {}
+                },
+                "frame-disagreement": {
+                    "checked": 0,
+                    "declined": {
+                        "single-frame": 6
+                    }
+                },
+                "duplicated-neighbour": {
+                    "checked": 0,
+                    "declined": {
+                        "no-lattice": 1
+                    }
+                },
+                "field-mismatch": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 6
+                    }
+                },
+                "frame-integrity": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 6
+                    }
+                }
+            },
+            "protocol": {
+                "id": null,
+                "codes": 6,
+                "readable": 0,
+                "declined": {
+                    "protocol-unmapped": 6
+                }
+            }
+        }
+    },
+    "fittings": [
+        {
+            "wig_id": "21e8a44d-b589-4364-b806-5316be4c2ea1",
+            "handle": "Jeff Hessenflow",
+            "github": "jshessen",
+            "date": "2026-09-30",
+            "rows": [
+                {
+                    "alias_at_claim": "Flame Speed",
+                    "digest": "3283e08ccceca2a3",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Temperature Down",
+                    "digest": "5762068ce3e92e3e",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Temperature Up",
+                    "digest": "3f800eef7aeae2ba",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Timer",
+                    "digest": "00aeaec90f8c8f30",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Flame Brightness",
+                    "digest": "d5e8314c7b2d39ac",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Power",
+                    "digest": "4f0bec6ac83826c1",
+                    "verdict": "worked"
+                }
+            ],
+            "key": "4YvbgDE894Zl2qcCEy1tt7eC9BACutvvFTqIU6/g2tE=",
+            "sig": "Smg9XOzhYl9a9eDFC6LUl4DFzW3AOCgYjyo1yLJ88GMVfj1xa6cp6ijXLeZ9jGYNtEeX0+d/Hqf9KgHbRUzLBA=="
+        }
+    ]
+}
