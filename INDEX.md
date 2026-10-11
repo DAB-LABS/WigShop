@@ -34,11 +34,12 @@ description yet.
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
 
-4 wig(s).
+5 wig(s).
 
 | Brand | Kind | Model | Wig | Fittings | Proven | Fitted by | Identifiers |
 |---|---|---|---|---:|---:|---|---|
 | Sanmli | light | TH-05 | [Candles (Tea Light)](wigs/sanmli/sanmli-candles-th05.wig.json) | 2 |  | David B, David Bailey | asin: B0DF7FPV55; upc: 794969274724 |
+| allen + roth | fireplace | 2289FM-26-932 | [Electric Fireplace](wigs/allen-roth/allen-roth-fireplace-2289fm-26-932-perfect-fit.wig.json) | 1 |  | Jeff Hessenflow | oem: Home Insights LCC |
 | Daikin | ac | FTXS50KVM | [Daikin FTXS50KVM](wigs/daikin/daikin-ac-ftxs50kvm-perfect-fit.wig.json) | 1 |  | Andre Mello |  |
 | Dreo | fan | DR-HAF004S | [Live Fan](wigs/dreo/dreo-fan-dr-haf004s-perfect-fit.wig.json) | 1 |  | Kevin | asin: B0D25XNX7P; upc: 810142853101 |
 | WInix | fan | 5500 | [Winix Air Purifier](wigs/winix/winix-fan-5500-perfect-fit.wig.json) | 1 |  | kenobob |  |
