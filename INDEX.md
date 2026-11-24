@@ -34,7 +34,7 @@ description yet.
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
 
-8 wig(s).
+9 wig(s).
 
 | Brand | Kind | Model | Wig | Fittings | Proven | Fitted by | Identifiers |
 |---|---|---|---|---:|---:|---|---|
@@ -42,6 +42,7 @@ product identifier.
 | allen + roth | fireplace | 2289FM-26-932 | [Electric Fireplace](wigs/allen-roth/allen-roth-fireplace-2289fm-26-932-perfect-fit.wig.json) | 1 |  | Jeff Hessenflow | oem: Home Insights LCC |
 | Daikin | ac | FTXN18KVJU | [Daikin FTXN18KVJU](wigs/daikin/daikin-ac-ftxn18kvju-perfect-fit.wig.json) | 1 |  | Rommie Salix |  |
 | Daikin | ac | FTXS50KVM | [Daikin FTXS50KVM](wigs/daikin/daikin-ac-ftxs50kvm-perfect-fit.wig.json) | 1 |  | Andre Mello |  |
+| DEWENWILS | outlet | HRS103W | [Remote Control Outlet Switch](wigs/dewenwils/dewenwils-outlet-hrs103w-perfect-fit.wig.json) | 1 |  | David | asin: B0FXFPNVKY |
 | Dreo | fan | DR-HAF004S | [Live Fan](wigs/dreo/dreo-fan-dr-haf004s-perfect-fit.wig.json) | 1 |  | Kevin | asin: B0D25XNX7P; upc: 810142853101 |
 | Komeco | ac | KOS 09QC 3HX | [Komeco KOS 09QC 3HX](wigs/komeco/komeco-ac-kos-09qc-3hx-perfect-fit.wig.json) | 1 |  | Marcos |  |
 | WInix | fan | 5500 | [Winix Air Purifier](wigs/winix/winix-fan-5500-perfect-fit.wig.json) | 1 |  | kenobob |  |
