@@ -34,7 +34,7 @@ description yet.
 Use your browser's find to search this page by brand, kind, model or
 product identifier.
 
-7 wig(s).
+8 wig(s).
 
 | Brand | Kind | Model | Wig | Fittings | Proven | Fitted by | Identifiers |
 |---|---|---|---|---:|---:|---|---|
@@ -45,6 +45,7 @@ product identifier.
 | Dreo | fan | DR-HAF004S | [Live Fan](wigs/dreo/dreo-fan-dr-haf004s-perfect-fit.wig.json) | 1 |  | Kevin | asin: B0D25XNX7P; upc: 810142853101 |
 | Komeco | ac | KOS 09QC 3HX | [Komeco KOS 09QC 3HX](wigs/komeco/komeco-ac-kos-09qc-3hx-perfect-fit.wig.json) | 1 |  | Marcos |  |
 | WInix | fan | 5500 | [Winix Air Purifier](wigs/winix/winix-fan-5500-perfect-fit.wig.json) | 1 |  | kenobob |  |
+| Beretta | ac | Breva EX 12000-1 E | [Beretta Breva EX](wigs/beretta/beretta-ac-breva-ex-12000-1-e.wig.json) | 0 |  |  |  |
 
 ---
 
