@@ -1,0 +1,107 @@
+{
+    "format": "hair-wig/3",
+    "name": "Honeywell QuietSet8",
+    "wig_id": "db1ba376-4acf-42f0-bd48-ad4fac1528d5",
+    "brand": "Honeywell",
+    "model": "HYF290B",
+    "kind": "fan",
+    "origin": "device",
+    "identifiers": {
+        "asin": "B01N0LQJN6",
+        "oem": "Intertek"
+    },
+    "signals": [
+        {
+            "alias": "Oscillate",
+            "pronto": "0000 006D 0030 0000 0033 000F 0032 0011 0010 0031 0031 0012 0030 0012 0031 0011 000F 0033 000F 0033 000F 0033 000F 0033 0030 0012 0030 011D 0030 0012 0030 0012 000F 0033 0031 0011 0030 0012 0030 0012 000F 0033 000F 0032 000F 0033 000F 0033 0030 0012 0030 011D 0030 0012 0030 0012 000F 0033 0030 0012 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 000F 0033 0030 0012 0030 011D 0030 0012 0030 0012 000F 0033 0030 0012 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 000F 0033 0030 0012 0030 0181 ",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Power",
+            "pronto": "0000 006D 0048 0000 0033 000F 0032 0011 0010 0031 0032 0011 0030 0012 0010 0032 000F 0033 000F 0033 000F 0033 0031 0011 000F 0033 000F 013E 0030 0012 0030 0012 000F 0033 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 000F 0033 0030 0012 000F 0033 000F 013E 0030 0012 0030 0012 000F 0032 0030 0012 0031 0011 0010 0032 0010 0032 0010 0032 000F 0033 0031 0011 0010 0032 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0010 0032 0031 0011 0010 0032 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0010 0032 0031 0011 0010 0032 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0010 0032 0031 0011 0010 0032 0010 0181 ",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        },
+        {
+            "alias": "Speed Up",
+            "pronto": "0000 006D 0048 0000 0033 000F 0032 0011 0010 0030 0031 0012 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 0030 0012 0030 0012 000F 013E 0030 0012 0030 0012 000F 0033 0030 0012 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 0030 0012 0030 0012 000F 013D 0030 0012 0030 0012 000F 0033 0030 0012 0030 0012 0030 0012 000F 0033 000F 0033 000F 0033 0030 0012 0030 0012 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0031 0011 0031 0011 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0031 0011 0031 0011 0010 013D 0031 0011 0031 0011 0010 0032 0031 0011 0031 0011 0031 0011 0010 0032 0010 0032 0010 0032 0031 0011 0031 0011 0010 0181 ",
+            "ditto_count": 1,
+            "bypass_protocol": false
+        }
+    ],
+    "fittings": [
+        {
+            "wig_id": "db1ba376-4acf-42f0-bd48-ad4fac1528d5",
+            "handle": "Drew",
+            "github": "Didgeridrew",
+            "date": "2026-11-04",
+            "rows": [
+                {
+                    "alias_at_claim": "Oscillate",
+                    "digest": "4aae1418c4cc27a5",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Power",
+                    "digest": "47a7d6420d05ce8b",
+                    "verdict": "worked"
+                },
+                {
+                    "alias_at_claim": "Speed Up",
+                    "digest": "620e7061a04a0b70",
+                    "verdict": "worked"
+                }
+            ],
+            "key": "iF9afO9fIxXO1o27oFCWKo+FKzMuXQyHBg7nwPphS1w=",
+            "sig": "NClj8cCzA42f/wcW7w3xQmx1LiKeBO3bKPvjuOiiWjFoZrjFRgSyfqOQZVi30nUROxOIDV9mkzijSyjDPLcwBw=="
+        }
+    ],
+    "comb": {
+        "version": 2,
+        "date": "2026-11-04",
+        "suspects": 0,
+        "counts": {},
+        "findings": [],
+        "coverage": {
+            "codes": 3,
+            "checked": 3,
+            "checks": {
+                "frame-shape": {
+                    "checked": 3,
+                    "declined": {}
+                },
+                "frame-disagreement": {
+                    "checked": 3,
+                    "declined": {}
+                },
+                "duplicated-neighbour": {
+                    "checked": 0,
+                    "declined": {
+                        "no-lattice": 1
+                    }
+                },
+                "field-mismatch": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 3
+                    }
+                },
+                "frame-integrity": {
+                    "checked": 0,
+                    "declined": {
+                        "protocol-unmapped": 3
+                    }
+                }
+            },
+            "protocol": {
+                "id": null,
+                "codes": 3,
+                "readable": 0,
+                "declined": {
+                    "protocol-unmapped": 3
+                }
+            }
+        }
+    }
+}
